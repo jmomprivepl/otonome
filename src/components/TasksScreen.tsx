@@ -14,6 +14,8 @@ import { CSS } from '@dnd-kit/utilities';
 import { isTauriRuntime } from '@/config/nativeLlm';
 import { handleUserRequest } from '@/hermes/handleUserRequest';
 import { MockInferenceEngine } from '@/hermes/mockInferenceEngine';
+import { decideRoute } from '@/domain/platformContracts';
+import { resolveBundleAuditForAdHocGraph } from '@/hermes/resolveWorkflowBundle';
 import { runTauriWorkflowAndWait, toRustDagGraph } from '@/hermes/tauriWorkflowRun';
 import { defaultLlamaSamplingPayload } from '@/llm/llamaSamplingDefaults';
 import { getNativeLlmPaths } from '@/config/nativeLlm';
@@ -39,7 +41,8 @@ interface TasksScreenProps {
 export function TasksScreen({ sidebarCollapsed }: TasksScreenProps) {
   const { tasks, editingTask, setEditingTask, selectedTask, setSelectedTask, updateTask, updateTasks, agents, activeProject, projects } =
     useKanbanStore();
-  const [viewMode, setViewMode] = useState<'board' | 'list'>('board');
+  const tasksWorkspaceLayout = useKanbanStore((s) => s.tasksWorkspaceLayout);
+  const setTasksWorkspaceLayout = useKanbanStore((s) => s.setTasksWorkspaceLayout);
 
   const hermesInFlightRef = useRef<Set<string>>(new Set());
   const runHermesIfMovedToTodo = useCallback(
@@ -88,6 +91,16 @@ export function TasksScreen({ sidebarCollapsed }: TasksScreenProps) {
                 : null;
 
               const prompt = `${t.title ?? ''}\n\n${t.description ?? ''}`.trim();
+              const st = useKanbanStore.getState();
+              const projectId = st.projects.find((p) => p.name === t.project)?.id ?? null;
+              const platformRoute = decideRoute({ correlationId: t.id, rawText: prompt });
+              const audit = await resolveBundleAuditForAdHocGraph({
+                logicalBundleId: platformRoute.sopBundleId,
+                projectId,
+                graph: { nodes: sop.nodes, edges: sop.edges },
+                embeddedWorkflowBundles: st.embeddedWorkflowBundles,
+                workflowBundlePins: st.workflowBundlePins,
+              });
               const finish = await runTauriWorkflowAndWait({
                 graph: toRustDagGraph(sop.nodes, sop.edges),
                 llamaOptions,
@@ -97,6 +110,9 @@ export function TasksScreen({ sidebarCollapsed }: TasksScreenProps) {
                 taskId: t.id,
                 hermesModel: null,
                 hermesMaxTurns: null,
+                bundleId: audit.bundleId,
+                bundleVersion: audit.bundleVersion,
+                contentDigest: audit.contentDigest,
               });
 
               const wf = finish.workflow;
@@ -131,14 +147,23 @@ export function TasksScreen({ sidebarCollapsed }: TasksScreenProps) {
             // non-SOP routes, so a lightweight mock is sufficient here.
             const engine = new MockInferenceEngine(140);
             const prompt = `${t.title ?? ''}\n\n${t.description ?? ''}`.trim();
+            const st = useKanbanStore.getState();
+            const taskProjectId = st.projects.find((p) => p.name === t.project)?.id ?? null;
 
-            const orc = await handleUserRequest({ userPrompt: prompt, taskId: t.id }, {
-              engine,
-              onProgress: () => {
-                /* Tasks UI currently doesn't render Hermes progress; result updates are enough. */
+            const orc = await handleUserRequest(
+              { userPrompt: prompt, taskId: t.id, activeProjectId: taskProjectId },
+              {
+                engine,
+                onProgress: () => {
+                  /* Tasks UI currently doesn't render Hermes progress; result updates are enough. */
+                },
+                getPersistedWorkflowSops: () => useKanbanStore.getState().agentSops,
+                getWorkflowBundleContext: () => ({
+                  embeddedWorkflowBundles: useKanbanStore.getState().embeddedWorkflowBundles,
+                  workflowBundlePins: useKanbanStore.getState().workflowBundlePins,
+                }),
               },
-              getPersistedWorkflowSops: () => useKanbanStore.getState().agentSops,
-            });
+            );
 
             const latest = useKanbanStore.getState().tasks.find((x) => x.id === taskId);
             if (!latest) return;
@@ -673,8 +698,8 @@ Error: ${data.error || 'Unknown error'}`;
           <div className="flex justify-center">
             <div className="inline-flex items-center bg-white/50 dark:bg-blue-950/50 backdrop-blur-sm rounded-lg p-1 border border-violet-200/50 dark:border-blue-800/50 shadow-sm">
               <button
-                onClick={() => setViewMode('board')}
-                className={`flex items-center px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${viewMode === 'board' 
+                onClick={() => setTasksWorkspaceLayout('board')}
+                className={`flex items-center px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${tasksWorkspaceLayout === 'board' 
                   ? 'bg-violet-100 dark:bg-blue-800/50 text-violet-800 dark:text-blue-200' 
                   : 'text-gray-600 dark:text-gray-300 hover:bg-violet-50 dark:hover:bg-blue-900/30'}`}
               >
@@ -682,8 +707,8 @@ Error: ${data.error || 'Unknown error'}`;
                 Board
               </button>
               <button
-                onClick={() => setViewMode('list')}
-                className={`flex items-center px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${viewMode === 'list' 
+                onClick={() => setTasksWorkspaceLayout('list')}
+                className={`flex items-center px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${tasksWorkspaceLayout === 'list' 
                   ? 'bg-violet-100 dark:bg-blue-800/50 text-violet-800 dark:text-blue-200' 
                   : 'text-gray-600 dark:text-gray-300 hover:bg-violet-50 dark:hover:bg-blue-900/30'}`}
               >
@@ -693,7 +718,7 @@ Error: ${data.error || 'Unknown error'}`;
             </div>
           </div>
           <main className="py-4 sm:py-6 md:py-8">
-            {viewMode === 'board' ? (
+            {tasksWorkspaceLayout === 'board' ? (
               <DndContext sensors={sensors} onDragEnd={onDndEnd}>
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
                   {(['draft', 'todo', 'inProgress', 'done'] as const).map((status) => (

@@ -9,6 +9,17 @@ import type {
   ClarificationPayload,
   HumanReviewPayload,
 } from './types/agentDag';
+import type {
+  EmbeddedWorkflowBundleStore,
+  EmbeddedWorkflowBundleVersion,
+  WorkflowBundlePin,
+  WorkflowBundlePinScopeKey,
+} from './types/workflowBundle';
+import { isProbableSha256Hex } from './domain/workflowBundleDigest';
+import type { WorkflowPublicSnapshot } from '@/hermes/tauriWorkflowRun';
+import type { ActiveDagRunSnapshot, DelegationHermesActivity } from '@/types/delegationHub';
+import { buildActiveDagRunFromWorkflowSnapshot } from '@/types/delegationHub';
+import type { TasksWorkspaceLayout } from '@/lib/delegationShellRules';
 
 export interface AgentSopRecord {
   id: string;
@@ -119,12 +130,27 @@ interface KanbanStore {
   agentDagEdges: AgentDagEdge[];
   /** Saved SOP definitions (persisted). */
   agentSops: AgentSopRecord[];
+  /** Versioned embedded workflow bundles (persisted): logical id → semver → immutable graph + digest. */
+  embeddedWorkflowBundles: EmbeddedWorkflowBundleStore;
+  /** Pin (semver + digest) per scope key: project id or `GLOBAL_WORKFLOW_BUNDLE_PIN_KEY`. */
+  workflowBundlePins: Record<string, WorkflowBundlePin>;
   /** When set, DAG mutations also update this entry in `agentSops`. */
   editingAgentSopId: string | null;
   agentDagLog: string[];
   pendingActionApproval: ActionPendingPayload | null;
   pendingClarification: ClarificationPayload | null;
   pendingHumanReview: HumanReviewPayload | null;
+  /** Volatile: last Hermes / hub chat orchestration (for Delegation Hub monitoring). */
+  delegationHermesActivity: DelegationHermesActivity | null;
+  /** Volatile: in-flight Tauri DAG run snapshot from workflow events. */
+  activeDagRun: ActiveDagRunSnapshot | null;
+  /** Volatile: Tasks screen board vs list layout (not persisted). */
+  tasksWorkspaceLayout: TasksWorkspaceLayout;
+  setTasksWorkspaceLayout: (layout: TasksWorkspaceLayout) => void;
+  setDelegationHermesActivity: (v: DelegationHermesActivity | null) => void;
+  syncActiveDagRunFromWorkflowSnapshot: (snap: WorkflowPublicSnapshot) => void;
+  patchActiveDagRunNodeEvent: (ev: { nodeId: string; phase: string; detail?: string }) => void;
+  clearActiveDagRun: () => void;
   updateAgentDagNode: (id: string, patch: Partial<AgentDagNode>) => void;
   addAgentDagNode: (node: AgentDagNode) => void;
   removeAgentDagNode: (id: string) => void;
@@ -147,6 +173,9 @@ interface KanbanStore {
     sopId: string,
     snapshot: { nodes: AgentDagNode[]; edges: AgentDagEdge[] },
   ) => boolean;
+  upsertEmbeddedWorkflowBundleVersion: (version: EmbeddedWorkflowBundleVersion) => void;
+  removeEmbeddedWorkflowBundleVersion: (bundleId: string, semver: string) => void;
+  setWorkflowBundlePin: (scopeKey: WorkflowBundlePinScopeKey, pin: WorkflowBundlePin | null) => void;
   setLoggedIn: (status: boolean) => void;
   setEditingTask: (task: Task | null) => void;
   setSelectedTask: (task: Task | null) => void;
@@ -359,6 +388,8 @@ export const useKanbanStore = create<KanbanStore>()(
   projects: initialProjects,
   activeProject: initialProjects[0],
   agentSops: [defaultAgentSopRecord],
+  embeddedWorkflowBundles: {},
+  workflowBundlePins: {},
   editingAgentSopId: null,
   agentDagNodes: defaultAgentSopRecord.nodes,
   agentDagEdges: defaultAgentSopRecord.edges,
@@ -366,6 +397,32 @@ export const useKanbanStore = create<KanbanStore>()(
   pendingActionApproval: null,
   pendingClarification: null,
   pendingHumanReview: null,
+  delegationHermesActivity: null,
+  activeDagRun: null,
+  tasksWorkspaceLayout: 'board',
+  setTasksWorkspaceLayout: (layout) => set({ tasksWorkspaceLayout: layout }),
+  setDelegationHermesActivity: (v) => set({ delegationHermesActivity: v }),
+  syncActiveDagRunFromWorkflowSnapshot: (snap) =>
+    set((s) => {
+      if (!snap.runId?.trim()) return s;
+      return {
+        activeDagRun: buildActiveDagRunFromWorkflowSnapshot(snap, s.activeDagRun),
+      };
+    }),
+  patchActiveDagRunNodeEvent: (ev) =>
+    set((s) => {
+      if (!s.activeDagRun) return s;
+      return {
+        activeDagRun: {
+          ...s.activeDagRun,
+          lastNodeId: ev.nodeId,
+          lastNodePhase: ev.phase,
+          lastNodeDetail: ev.detail,
+          updatedAt: Date.now(),
+        },
+      };
+    }),
+  clearActiveDagRun: () => set({ activeDagRun: null }),
   updateAgentDagNode: (id, patch) =>
     set((state) => {
       const agentDagNodes = state.agentDagNodes.map((n) => (n.id === id ? { ...n, ...patch } : n));
@@ -486,6 +543,59 @@ export const useKanbanStore = create<KanbanStore>()(
     });
     return ok;
   },
+  upsertEmbeddedWorkflowBundleVersion: (version) => {
+    if (!isProbableSha256Hex(version.contentDigest)) {
+      throw new Error(
+        'workflow bundle version requires contentDigest: 64-char lowercase SHA-256 hex of the canonical graph',
+      );
+    }
+    if (version.bundleId.trim() === '' || version.semver.trim() === '') {
+      throw new Error('workflow bundle version requires non-empty bundleId and semver');
+    }
+    const installedAt = version.installedAt ?? Date.now();
+    const next: EmbeddedWorkflowBundleVersion = { ...version, installedAt };
+    set((state) => {
+      const prevCatalog = state.embeddedWorkflowBundles[version.bundleId];
+      const versions = {
+        ...(prevCatalog?.versions ?? {}),
+        [version.semver]: next,
+      };
+      return {
+        embeddedWorkflowBundles: {
+          ...state.embeddedWorkflowBundles,
+          [version.bundleId]: { versions },
+        },
+      };
+    });
+  },
+  removeEmbeddedWorkflowBundleVersion: (bundleId, semver) =>
+    set((state) => {
+      const catalog = state.embeddedWorkflowBundles[bundleId];
+      if (!catalog?.versions[semver]) return state;
+      const rest = { ...catalog.versions };
+      delete rest[semver];
+      const nextStore = { ...state.embeddedWorkflowBundles };
+      if (Object.keys(rest).length === 0) {
+        delete nextStore[bundleId];
+      } else {
+        nextStore[bundleId] = { versions: rest };
+      }
+      return { embeddedWorkflowBundles: nextStore };
+    }),
+  setWorkflowBundlePin: (scopeKey, pin) =>
+    set((state) => {
+      if (!pin) {
+        const next = { ...state.workflowBundlePins };
+        delete next[scopeKey];
+        return { workflowBundlePins: next };
+      }
+      if (!isProbableSha256Hex(pin.contentDigest)) {
+        throw new Error('workflow bundle pin requires contentDigest: 64-char lowercase SHA-256 hex');
+      }
+      return {
+        workflowBundlePins: { ...state.workflowBundlePins, [scopeKey]: pin },
+      };
+    }),
   importPlaygroundAsNewAgentSop: (nodes, edges) => {
     const id =
       typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
@@ -643,6 +753,8 @@ export const useKanbanStore = create<KanbanStore>()(
         agentSops: state.agentSops,
         agentDagNodes: state.agentDagNodes,
         agentDagEdges: state.agentDagEdges,
+        embeddedWorkflowBundles: state.embeddedWorkflowBundles,
+        workflowBundlePins: state.workflowBundlePins,
       }),
       merge: (persisted, current) => {
         const p = (persisted ?? {}) as Partial<KanbanStore>;
@@ -685,6 +797,12 @@ export const useKanbanStore = create<KanbanStore>()(
           agentSops,
           agentDagNodes: dagNodes,
           agentDagEdges: dagEdges,
+          embeddedWorkflowBundles:
+            p.embeddedWorkflowBundles !== undefined
+              ? p.embeddedWorkflowBundles
+              : current.embeddedWorkflowBundles,
+          workflowBundlePins:
+            p.workflowBundlePins !== undefined ? p.workflowBundlePins : current.workflowBundlePins,
           editingAgentSopId: null,
         };
       },
