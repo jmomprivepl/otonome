@@ -34,6 +34,7 @@
 | `src/components/AgentHitlBridge.tsx` | Tauri listeners → **`withResolvedTimeSensitivity`** → store → modals. |
 | `src/types/agentDag.ts` | `HitlSensitivityMeta`, **`HitlModalVariant`**. |
 | `ActionApprovalModal` / `ClarificationModal` / `HumanReviewModal` | `variant` visuals + focus containment when urgent. |
+| `src/components/AuthenticatedWorkspaceFrame.tsx` | Shared **`Header` + `pt-[73px]` + `pl-16`/`pl-64`** for logged-in workspace routes (reduces duplicated layout). |
 
 **Superseded (do not implement as written):** `DelegationAppShell.tsx`, `DelegationHubHomeBody.tsx`, nested `Outlet` three-column shell in **`App.tsx`** — replaced by **`DelegationHubScreen` + DelegationShellChrome overlay** pattern above.
 
@@ -431,13 +432,13 @@ An earlier spike used **`delegationShellForceExpanded`** in the store coupled to
 
 ### Task 7 *(superseded)* — Outlet-based **`DelegationAppShell`**
 
-~~The steps and React snippet below were the original blueprint.~~ **Canonical implementation:** **`DelegationHubScreen`** (route `/`) provides the SME hub Hermes + monitoring surface. **`DelegationShellChrome`** + **`DelegationExpandedDrawer`** + **`DelegationMinimizedStrip`** satisfy §7 hybrid minimize **without** wrapping every route in a three-column **`Outlet`**. **Retain per-route `Header` + padding** until a deliberate layout pass (**Task 8**) removes duplication independently of an AppShell.
+~~The steps and React snippet below were the original blueprint.~~ **Canonical implementation:** **`DelegationHubScreen`** (route `/`) provides the SME hub Hermes + monitoring surface. **`DelegationShellChrome`** + **`DelegationExpandedDrawer`** + **`DelegationMinimizedStrip`** satisfy §7 hybrid minimize **without** wrapping every route in a three-column **`Outlet`**. Per-route chrome duplication is addressed by **`AuthenticatedWorkspaceFrame`** (**Task 8**).
 
 ---
 
-### Task 8: Header duplication (optional cleanup)
+### Task 8: Header duplication — **done**
 
-Incremental removal of duplicated **`Header` / `ml-64`** wrappers on Tasks, Projects, SOP screens, etc., **only if** a shared chrome component is adopted. **Not blocked on** superseded Task 7.
+**`AuthenticatedWorkspaceFrame`** (`src/components/AuthenticatedWorkspaceFrame.tsx`) centralizes **`Header` + `pt-[73px]` + `pl-16`/`pl-64`** across logged-in workspace routes (Tasks, Projects, Dashboard, Settings, Playground, SOP graph/list, Python tools, etc.). **`Onboarding`** still mounts **`Header`** directly (non–workspace-pattern).
 
 ---
 
@@ -456,25 +457,43 @@ Incremental removal of duplicated **`Header` / `ml-64`** wrappers on Tasks, Proj
 ---
 
 
-### Task 10: Documentation and regression checklist
+### Task 10: Documentation and regression checklist — **documentation complete**
 
-**Files:**
-- Modify: `docs/superpowers/specs/2026-05-06-delegation-hub-ui-design.md` (add “Implementation notes” link to this plan if desired)
+**Product acceptance criteria** (what “good” means): [spec §12 — Verification Criteria (UX acceptance)](../specs/2026-05-06-delegation-hub-ui-design.md#12-verification-criteria-ux-acceptance).
 
-- [ ] **Step 1: Manual QA script** (execute in Tauri + browser)
+**Spec cross-link:** [spec §13 — Implementation notes](../specs/2026-05-06-delegation-hub-ui-design.md#13-implementation-notes) points back to this plan.
 
-1. Log in, complete onboarding: `/` shows Hermes + monitoring + home body.  
-2. Visit `/engine`: engine works; on narrow width **if** treated as focus in future, verify strip (optional).  
-3. `/tasks` board + narrow window → minimized strip; counts match visible HITL state.  
-4. Switch Tasks to **List** at narrow width → shell **full** returns.  
-5. `/agent-sop/edit/...` + narrow → strip; **Expand** restores columns; **Collapse** returns.  
-6. Trigger HITL event with `timeSensitive: true` → modal prominence.
+---
 
-- [ ] **Step 2: Commit**
+#### Automated smoke (run locally before manual QA)
 
 ```bash
-git add docs/superpowers/plans/2026-05-06-delegation-hub-ui-implementation.md
-git commit -m "docs(delegation): link implementation plan QA checklist"
+npm test -- src/lib/delegationShellRules.test.ts src/lib/delegationMonitoringCounts.test.ts src/domain/hitlTimeSensitivity.test.ts
+```
+
+Optional full unit run: `npm test`
+
+---
+
+#### Manual regression checklist (execute in **Tauri** and **browser**, use viewport **under 1280px** inner width unless noted)
+
+- [ ] **1. Hub & routing** — Log in, complete onboarding: **`/`** shows **Hermes + monitoring column + hub body** (not engine command center as default home).  
+- [ ] **2. Engine** — **`/engine`** loads and functions; note whether it is focus-class in your build (strip optional).  
+- [ ] **3. Tasks board + narrow** — **`/tasks`** in **board** layout, narrow window → **minimized strip** appears; **approval / SOP / jobs** badge counts match visible store/HITL/DAG state.  
+- [ ] **4. Tasks list escape hatch** — Switch Tasks to **List** at same narrow width → **full** delegation chrome returns (no automatic minimize for list).  
+- [ ] **5. SOP graph editor** — **`/agent-sop/edit/...`**, narrow → strip; **Expand** opens drawer overlay with full hub; **Collapse** returns to strip; underlying graph **stays mounted**.  
+- [ ] **6. Other focus-class routes** — e.g. **`/playground`**, narrow → strip behavior consistent with `delegationShellRules`.  
+- [ ] **7. Non–focus-class sanity** — e.g. **`/agent-sop`** (list), **`/settings`**, wide layout: **no spurious strip**; **`AuthenticatedWorkspaceFrame`** pages show **consistent header offset** (no double top padding vs hub).  
+- [ ] **8. Time-sensitive HITL** — Event with **`timeSensitive: true`** → **elevated modal** (stronger backdrop, above drawer **z-index**); item also **Time-sensitive** in monitoring column when queued.  
+- [ ] **9. Keyboard / a11y spot-check** — From minimized shell: **Expand** reachable without mouse-only traps; modal **focus containment** on open/close.
+
+---
+
+#### Commit (after edits)
+
+```bash
+git add docs/superpowers/plans/2026-05-06-delegation-hub-ui-implementation.md docs/superpowers/specs/2026-05-06-delegation-hub-ui-design.md
+git commit -m "docs(delegation): QA checklist and spec/plan cross-links"
 ```
 
 ---
@@ -489,4 +508,4 @@ git commit -m "docs(delegation): link implementation plan QA checklist"
 
 ## Execution note
 
-Prior **subagent-driven** execution proceeded on branch **`feat/delegation-hub-shell`**. Subsequent work: **Task 8** (optional chrome dedupe) and **Task 10** (QA checklist + product-spec cross-links) as needed.
+Prior **subagent-driven** execution proceeded on branch **`feat/delegation-hub-shell`**. **Task 8** (**`AuthenticatedWorkspaceFrame`**) and **Task 10** (this checklist + **spec §13** cross-links) are reflected in HEAD; rerun **manual** Task 10 checkboxes before each release candidate.

@@ -199,12 +199,22 @@ These notes ease engineering planning; they are not exhaustive audits.
 
 ---
 
-## 13. References
+## 13. Implementation notes
+
+Engineering task breakdown, canonical file map, **manual regression checklist**, and superseded design notes live in:
+
+- [**Delegation Hub UI — Implementation Plan**](../plans/2026-05-06-delegation-hub-ui-implementation.md) (includes Task 10 QA script and automated smoke commands)
+
+Keep this specification as the UX source of truth; treat the implementation plan as the execution and release-gate workbook.
+
+---
+
+## 14. References
 
 - Interactive wireframes: [`wireframes/delegation-hub-wireframes.html`](./wireframes/delegation-hub-wireframes.html)  
 
 ---
 
-## 14. Next Step (process)
+## 15. Next Step (process)
 
-After stakeholder review of this file, produce an implementation plan via the **writing-plans** workflow: route changes, shell componentization, state sources for monitoring column, approvals policy wiring, and incremental rollout behind feature flags if needed.
+After stakeholder review of this file, produce an implementation plan via the **writing-plans** workflow: route changes, shell componentization, state sources for monitoring column, approvals policy wiring, and incremental rollout behind feature flags if needed. **When implementation exists**, use §13 above instead of spawning a duplicate plan unless requirements change materially.
