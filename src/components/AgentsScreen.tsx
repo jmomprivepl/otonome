@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Search, X, Volume2, Play, Loader2 } from 'lucide-react';
-import { Header } from './Header';
+import { AuthenticatedWorkspaceFrame } from '@/components/AuthenticatedWorkspaceFrame';
 import { useKanbanStore } from '@/store';
 import { AgentProfile } from '@/config/agentProfiles';
 import { useRef, useEffect } from 'react';
@@ -359,8 +359,7 @@ export const AgentsScreen = ({ sidebarCollapsed }: AgentsScreenProps) => {
 
   return (
     <>
-      <Header sidebarCollapsed={sidebarCollapsed} showAgents={false} />
-      <div className={`transition-all duration-300 pt-[73px] ${sidebarCollapsed ? 'pl-16' : 'pl-64'}`}>
+      <AuthenticatedWorkspaceFrame sidebarCollapsed={sidebarCollapsed} showAgents={false}>
         <div className="max-w-5xl mx-auto px-4 py-6">
           <div className="mb-6 relative">
             <div className="relative">
@@ -418,7 +417,7 @@ export const AgentsScreen = ({ sidebarCollapsed }: AgentsScreenProps) => {
             ))}
           </div>
         </div>
-      </div>
+      </AuthenticatedWorkspaceFrame>
 
       {/* Modal */}
       {selectedAgent && (

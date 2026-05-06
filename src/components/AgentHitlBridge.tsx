@@ -6,6 +6,8 @@ import { ActionApprovalModal } from '@/components/ActionApprovalModal';
 import { ClarificationModal } from '@/components/ClarificationModal';
 import { HumanReviewModal } from '@/components/HumanReviewModal';
 import type { ActionPendingPayload, ClarificationPayload, HumanReviewPayload } from '@/types/agentDag';
+import type { WorkflowPublicSnapshot } from '@/hermes/tauriWorkflowRun';
+import { logTimeSensitivityResolution, withResolvedTimeSensitivity } from '@/domain/hitlTimeSensitivity';
 
 export function AgentHitlBridge() {
   const isLoggedIn = useKanbanStore((s) => s.isLoggedIn);
@@ -22,32 +24,61 @@ export function AgentHitlBridge() {
 
     const setup = (async () => {
       const u1 = await listen<ActionPendingPayload>('action_pending_approval', (e) => {
-        setPendingActionApproval(e.payload);
+        const enriched = withResolvedTimeSensitivity(e.payload);
+        logTimeSensitivityResolution('action', enriched.id, enriched.timeSensitivityRule ?? 'none', enriched.timeSensitive);
+        setPendingActionApproval(enriched);
       });
       const u2 = await listen<ClarificationPayload>('clarification_needed', (e) => {
-        setPendingClarification(e.payload);
+        const enriched = withResolvedTimeSensitivity(e.payload);
+        logTimeSensitivityResolution(
+          'clarification',
+          enriched.id,
+          enriched.timeSensitivityRule ?? 'none',
+          enriched.timeSensitive,
+        );
+        setPendingClarification(enriched);
       });
       const u3 = await listen<HumanReviewPayload>('workflow_human_needed', (e) => {
-        setPendingHumanReview(e.payload);
+        const enriched = withResolvedTimeSensitivity(e.payload);
+        logTimeSensitivityResolution(
+          'human_review',
+          enriched.id,
+          enriched.timeSensitivityRule ?? 'none',
+          enriched.timeSensitive,
+        );
+        setPendingHumanReview(enriched);
       });
       const u4 = await listen<{ nodeId: string; phase: string; detail?: string }>('dag_node_event', (e) => {
         const { nodeId, phase, detail } = e.payload;
         appendAgentDagLog(`node ${nodeId}: ${phase}${detail ? ` — ${detail}` : ''}`);
+        useKanbanStore.getState().patchActiveDagRunNodeEvent({ nodeId, phase, detail });
       });
-      type WorkflowSnap = {
-        runId?: string;
-        nodeOutputs?: Record<string, string>;
-      };
-      const u5 = await listen<WorkflowSnap>('workflow_state_updated', (e) => {
-        const nOut = e.payload.nodeOutputs ?? {};
+      const u5 = await listen<WorkflowPublicSnapshot>('workflow_state_updated', (e) => {
+        const p = e.payload;
+        const nOut = p.nodeOutputs ?? {};
         const cnt = Object.keys(nOut).length;
-        appendAgentDagLog(
-          `workflow state updated (${e.payload.runId ?? '?'}) — ${cnt} node output(s)`,
-        );
+        appendAgentDagLog(`workflow state updated (${p.runId ?? '?'}) — ${cnt} node output(s)`);
+        useKanbanStore.getState().syncActiveDagRunFromWorkflowSnapshot(p);
       });
-      const u6 = await listen<{ ok: boolean; error?: string }>('dag_run_finished', (e) => {
-        const { ok, error } = e.payload;
+      type DagRunFinishedPayload = {
+        ok: boolean;
+        error?: string;
+        runId?: string;
+        workflow?: WorkflowPublicSnapshot;
+      };
+      const u6 = await listen<DagRunFinishedPayload>('dag_run_finished', (e) => {
+        const { ok, error, workflow: wf } = e.payload;
         appendAgentDagLog(ok ? 'DAG run finished OK' : `DAG run failed: ${error ?? 'unknown'}`);
+        const bid = wf?.bundleId?.trim();
+        const ver = wf?.bundleVersion?.trim();
+        const digest = wf?.contentDigest?.trim();
+        if (bid || ver || digest) {
+          const digShort = digest && digest.length > 0 ? `${digest.slice(0, 12)}…` : '—';
+          appendAgentDagLog(
+            `  bundle audit: ${bid ?? '—'} @ ${ver ?? '—'} · digest ${digShort}`,
+          );
+        }
+        useKanbanStore.getState().clearActiveDagRun();
       });
       return [u1, u2, u3, u4, u5, u6] as const;
     })();
@@ -116,6 +147,7 @@ export function AgentHitlBridge() {
       {pendingActionApproval ? (
         <ActionApprovalModal
           payload={pendingActionApproval}
+          variant={pendingActionApproval.timeSensitive ? 'timeSensitive' : 'standard'}
           onApprove={() => void resolveApproval(true)}
           onReject={() => void resolveApproval(false)}
         />
@@ -123,6 +155,7 @@ export function AgentHitlBridge() {
       {pendingClarification ? (
         <ClarificationModal
           payload={pendingClarification}
+          variant={pendingClarification.timeSensitive ? 'timeSensitive' : 'standard'}
           onSubmit={(t) => void submitClarification(t)}
           onCancel={() => void submitClarification('user_cancelled')}
         />
@@ -130,6 +163,7 @@ export function AgentHitlBridge() {
       {pendingHumanReview ? (
         <HumanReviewModal
           payload={pendingHumanReview}
+          variant={pendingHumanReview.timeSensitive ? 'timeSensitive' : 'standard'}
           onSubmit={(approved, notes) => void submitHumanReview(approved, notes)}
         />
       ) : null}

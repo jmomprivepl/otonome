@@ -23,14 +23,13 @@ mod sop_normalize;
 mod ternary_router;
 mod workflow_state;
 
-use dag_types::DagGraph;
 use llama_cli::{
     llama_cli_send_line, llama_cli_start_session, llama_cli_stop, LlamaCliStartOptions, LlamaCliState,
 };
 use hermes_agent::hermes_run_agent_session;
 use nsdar::{nsdar_local_complete, nsdar_route_preview};
 use hitl::HumanReviewResponse;
-use orchestrator::{AgentRuntimeState, DagGraphPayload, DagRunOptions, DagRunStartArgs};
+use orchestrator::{AgentRuntimeState, DagGraphPayload, DagPublishPayload, DagRunOptions, DagRunStartArgs};
 use router_llama_cpp::router_generate_routing_vector;
 use sop_normalize::{normalize_sop_with_llama, NormalizedSop};
 
@@ -80,10 +79,10 @@ pub fn run() {
 
 #[tauri::command]
 fn dag_publish_graph(
-    graph: DagGraph,
+    payload: DagPublishPayload,
     state: tauri::State<'_, AgentRuntimeState>,
 ) -> Result<(), String> {
-    state.publish_graph(graph)
+    state.publish_graph_payload(payload)
 }
 
 #[tauri::command]
@@ -111,6 +110,7 @@ fn dag_run_start(
             task_id,
             hermes_model,
             hermes_max_turns,
+            ..Default::default()
         },
     )
 }

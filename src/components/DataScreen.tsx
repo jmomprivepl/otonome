@@ -3,7 +3,7 @@ import { Database, Plus, Trash2, Save } from 'lucide-react';
 import { listBases, listTables, listRecords, createRecord, updateRecord, deleteRecord } from '@/airtableops';
 import { useNavigate } from 'react-router-dom';
 
-import { Header } from './Header';
+import { AuthenticatedWorkspaceFrame } from '@/components/AuthenticatedWorkspaceFrame';
 
 interface AirtableBase {
   id: string;
@@ -353,9 +353,7 @@ export function DataScreen({ sidebarCollapsed }: DataScreenProps) {
   };
 
   return (
-    <>
-    <Header sidebarCollapsed={sidebarCollapsed} showAgents={false} />
-    <div className={`transition-all duration-300 pt-[73px] ${sidebarCollapsed ? 'pl-16' : 'pl-64'}`}>
+    <AuthenticatedWorkspaceFrame sidebarCollapsed={sidebarCollapsed} showAgents={false}>
       <div className="mx-auto" 
         style={{ 
           maxWidth: 'min(1480px, 100%)',
@@ -592,7 +590,6 @@ export function DataScreen({ sidebarCollapsed }: DataScreenProps) {
           </div>
         </main>
       </div>
-    </div>
-    </>
+    </AuthenticatedWorkspaceFrame>
   );
 }

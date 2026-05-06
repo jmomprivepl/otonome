@@ -23,6 +23,9 @@ pub struct DagRunOptions {
     pub task_id: Option<String>,
     pub hermes_model: Option<String>,
     pub hermes_max_turns: Option<u32>,
+    pub bundle_id: Option<String>,
+    pub bundle_version: Option<String>,
+    pub content_digest: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -58,6 +61,25 @@ pub struct DagGraphPayload {
     pub hermes_model: Option<String>,
     #[serde(default)]
     pub hermes_max_turns: Option<u32>,
+    #[serde(default)]
+    pub bundle_id: Option<String>,
+    #[serde(default)]
+    pub bundle_version: Option<String>,
+    #[serde(default)]
+    pub content_digest: Option<String>,
+}
+
+/// Frontend `dag_publish_graph` body: graph plus optional bundle audit (camelCase JSON).
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DagPublishPayload {
+    pub graph: DagGraph,
+    #[serde(default)]
+    pub bundle_id: Option<String>,
+    #[serde(default)]
+    pub bundle_version: Option<String>,
+    #[serde(default)]
+    pub content_digest: Option<String>,
 }
 
 #[derive(Clone)]
@@ -69,6 +91,10 @@ pub struct AgentRuntimeState {
 
 struct OrchestratorInner {
     graph: Option<DagGraph>,
+    /// Last published bundle metadata (from sync UI or inline workflow start).
+    publish_bundle_id: Option<String>,
+    publish_bundle_version: Option<String>,
+    publish_content_digest: Option<String>,
     workflow: WorkflowScratch,
 }
 
@@ -78,6 +104,9 @@ struct WorkflowScratch {
     user_request: String,
     sop_id: Option<String>,
     task_id: Option<String>,
+    bundle_id: Option<String>,
+    bundle_version: Option<String>,
+    content_digest: Option<String>,
     node_outputs: HashMap<String, String>,
     human_inputs: HashMap<String, serde_json::Value>,
 }
@@ -86,6 +115,9 @@ impl Default for OrchestratorInner {
     fn default() -> Self {
         Self {
             graph: None,
+            publish_bundle_id: None,
+            publish_bundle_version: None,
+            publish_content_digest: None,
             workflow: WorkflowScratch::default(),
         }
     }
@@ -114,10 +146,13 @@ fn new_run_id() -> String {
 }
 
 impl AgentRuntimeState {
-    pub fn publish_graph(&self, graph: DagGraph) -> Result<(), String> {
-        graph.validate()?;
+    pub fn publish_graph_payload(&self, payload: DagPublishPayload) -> Result<(), String> {
+        payload.graph.validate()?;
         let mut g = self.inner.lock().map_err(|e| e.to_string())?;
-        g.graph = Some(graph);
+        g.graph = Some(payload.graph);
+        g.publish_bundle_id = payload.bundle_id;
+        g.publish_bundle_version = payload.bundle_version;
+        g.publish_content_digest = payload.content_digest;
         g.workflow = WorkflowScratch::default();
         Ok(())
     }
@@ -134,11 +169,29 @@ impl AgentRuntimeState {
                 .clone()
                 .ok_or_else(|| "no graph published".to_string())?
         };
+        let (bundle_id, bundle_version, content_digest) = {
+            let g = self.inner.lock().map_err(|e| e.to_string())?;
+            (
+                g.publish_bundle_id.clone(),
+                g.publish_bundle_version.clone(),
+                g.publish_content_digest.clone(),
+            )
+        };
         self.spawn_run(
             app,
             graph,
             llama_options,
-            opts,
+            DagRunOptions {
+                anthropic_model: opts.anthropic_model,
+                user_request: opts.user_request,
+                sop_id: opts.sop_id,
+                task_id: opts.task_id,
+                hermes_model: opts.hermes_model,
+                hermes_max_turns: opts.hermes_max_turns,
+                bundle_id,
+                bundle_version,
+                content_digest,
+            },
         )
     }
 
@@ -152,11 +205,17 @@ impl AgentRuntimeState {
             task_id,
             hermes_model,
             hermes_max_turns,
+            bundle_id,
+            bundle_version,
+            content_digest,
         } = payload;
         graph.validate()?;
         {
             let mut g = self.inner.lock().map_err(|e| e.to_string())?;
             g.graph = Some(graph.clone());
+            g.publish_bundle_id = bundle_id.clone();
+            g.publish_bundle_version = bundle_version.clone();
+            g.publish_content_digest = content_digest.clone();
             g.workflow = WorkflowScratch::default();
         }
         self.spawn_run(
@@ -170,6 +229,9 @@ impl AgentRuntimeState {
                 task_id,
                 hermes_model,
                 hermes_max_turns,
+                bundle_id,
+                bundle_version,
+                content_digest,
             },
         )
     }
@@ -195,6 +257,9 @@ impl AgentRuntimeState {
             g.workflow.user_request = opts.user_request.clone().unwrap_or_default();
             g.workflow.sop_id = opts.sop_id.clone();
             g.workflow.task_id = opts.task_id.clone();
+            g.workflow.bundle_id = opts.bundle_id.clone();
+            g.workflow.bundle_version = opts.bundle_version.clone();
+            g.workflow.content_digest = opts.content_digest.clone();
             g.workflow.node_outputs.clear();
             g.workflow.human_inputs.clear();
         }
@@ -207,6 +272,9 @@ impl AgentRuntimeState {
             sop_id: opts.sop_id.as_deref(),
             task_id: opts.task_id.as_deref(),
             user_request_len: opts.user_request.clone().unwrap_or_default().len(),
+            bundle_id: opts.bundle_id.as_deref(),
+            bundle_version: opts.bundle_version.as_deref(),
+            content_digest: opts.content_digest.as_deref(),
         });
 
         let rt = self.clone();
@@ -259,6 +327,9 @@ impl AgentRuntimeState {
             user_request: g.workflow.user_request.clone(),
             sop_id: g.workflow.sop_id.clone(),
             task_id: g.workflow.task_id.clone(),
+            bundle_id: g.workflow.bundle_id.clone(),
+            bundle_version: g.workflow.bundle_version.clone(),
+            content_digest: g.workflow.content_digest.clone(),
             node_outputs: g.workflow.node_outputs.clone(),
             human_inputs: g.workflow.human_inputs.clone(),
         })

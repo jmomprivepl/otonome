@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Header } from './Header';
+import { AuthenticatedWorkspaceFrame } from '@/components/AuthenticatedWorkspaceFrame';
 import pyodideManager from '../python/pyodideManager';
 import type { PythonResult } from '../python/types';
 
@@ -309,10 +309,9 @@ else:
   };
 
   return (
-    <div className={`flex flex-col h-screen ${sidebarCollapsed ? 'ml-16' : 'ml-64'}`}>
-      <Header showAgents={false} sidebarCollapsed={sidebarCollapsed} />
-      
-      <div className="flex flex-1 overflow-hidden mt-20">
+    <AuthenticatedWorkspaceFrame sidebarCollapsed={sidebarCollapsed} showAgents={false}>
+      <div className="flex h-[calc(100vh-73px)] flex-col overflow-hidden">
+        <div className="flex min-h-0 flex-1 overflow-hidden">
         {/* Tools sidebar */}
         <div className="w-64 bg-gray-100 border-r border-gray-200 flex flex-col">
           <div className="p-4 border-b border-gray-200">
@@ -667,7 +666,8 @@ else:
             </div>
           )}
         </div>
+        </div>
       </div>
-    </div>
+    </AuthenticatedWorkspaceFrame>
   );
 }

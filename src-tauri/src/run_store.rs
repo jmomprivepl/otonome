@@ -9,6 +9,12 @@ pub struct RunStartedEvent<'a> {
     pub sop_id: Option<&'a str>,
     pub task_id: Option<&'a str>,
     pub user_request_len: usize,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub bundle_id: Option<&'a str>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub bundle_version: Option<&'a str>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub content_digest: Option<&'a str>,
 }
 
 fn ledger_path() -> Result<std::path::PathBuf, String> {
@@ -77,6 +83,9 @@ mod tests {
             sop_id: None,
             task_id: None,
             user_request_len: 3,
+            bundle_id: None,
+            bundle_version: None,
+            content_digest: None,
         })?;
 
         let p = dir.path().join("runs.jsonl");

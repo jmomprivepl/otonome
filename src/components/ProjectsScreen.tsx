@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Header } from './Header';
+import { AuthenticatedWorkspaceFrame } from '@/components/AuthenticatedWorkspaceFrame';
 import { useKanbanStore } from '@/store';
 import { Project, ProjectStatus } from '@/types';
 import { Calendar, PenSquare, UserPlus, Lightbulb, Save, X, Plus, FileText, Building } from 'lucide-react';
@@ -219,9 +219,8 @@ export const ProjectsScreen = ({ sidebarCollapsed, setChatSidebarOpen, setChatIn
 
   if (!selectedProject) {
     return (
-      <div>
-        <Header sidebarCollapsed={sidebarCollapsed || false} />
-        <div className={`transition-all duration-300 pt-[73px] ${sidebarCollapsed ? 'pl-16' : 'pl-64'}`}>
+      <>
+        <AuthenticatedWorkspaceFrame sidebarCollapsed={sidebarCollapsed || false}>
           <div className="max-w-7xl mx-auto p-3 sm:p-4 md:p-6">
             <button
               onClick={() => setIsNewProjectModalOpen(true)}
@@ -261,7 +260,7 @@ export const ProjectsScreen = ({ sidebarCollapsed, setChatSidebarOpen, setChatIn
               ))}
             </div>
           </div>
-        </div>
+        </AuthenticatedWorkspaceFrame>
         
         {/* New Project Modal */}
         {isNewProjectModalOpen && (
@@ -342,7 +341,7 @@ export const ProjectsScreen = ({ sidebarCollapsed, setChatSidebarOpen, setChatIn
             </div>
           </div>
         )}
-      </div>
+      </>
     );
   }
 
@@ -359,9 +358,8 @@ export const ProjectsScreen = ({ sidebarCollapsed, setChatSidebarOpen, setChatIn
 
 
   return (
-    <div>
-      <Header sidebarCollapsed={sidebarCollapsed || false} />
-      <div className={`transition-all duration-300 pt-[73px] ${sidebarCollapsed ? 'pl-16' : 'pl-64'}`}>
+    <>
+      <AuthenticatedWorkspaceFrame sidebarCollapsed={sidebarCollapsed || false}>
         <div className="max-w-7xl mx-auto p-3 sm:p-4 md:p-6 space-y-4 sm:space-y-6">
         <button
           onClick={() => setIsNewProjectModalOpen(true)}
@@ -460,7 +458,7 @@ export const ProjectsScreen = ({ sidebarCollapsed, setChatSidebarOpen, setChatIn
             </div>
           </div>
         </div>
-      </div>
+      </AuthenticatedWorkspaceFrame>
       
       {/* New Project Modal */}
       {isNewProjectModalOpen && (
@@ -541,6 +539,6 @@ export const ProjectsScreen = ({ sidebarCollapsed, setChatSidebarOpen, setChatIn
           </div>
         </div>
       )}
-    </div>
+    </>
   );
 };

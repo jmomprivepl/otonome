@@ -1,4 +1,7 @@
-export const DELEGATION_SHELL_MINIMIZE_MAX_WIDTH_PX = 1280;
+import { DELEGATION_SHELL_BREAKPOINT_PX } from '@/delegation/hubConstants';
+
+/** Spec §7: same breakpoint as `DELEGATION_SHELL_BREAKPOINT_PX` in hub constants. */
+export const DELEGATION_SHELL_MINIMIZE_MAX_WIDTH_PX = DELEGATION_SHELL_BREAKPOINT_PX;
 
 export type TasksWorkspaceLayout = 'board' | 'list';
 

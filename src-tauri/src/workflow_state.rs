@@ -10,6 +10,12 @@ pub struct WorkflowPublicSnapshot {
     pub user_request: String,
     pub sop_id: Option<String>,
     pub task_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub bundle_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub bundle_version: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub content_digest: Option<String>,
     pub node_outputs: HashMap<String, String>,
     pub human_inputs: HashMap<String, serde_json::Value>,
 }
@@ -21,6 +27,9 @@ impl Default for WorkflowPublicSnapshot {
             user_request: String::new(),
             sop_id: None,
             task_id: None,
+            bundle_id: None,
+            bundle_version: None,
+            content_digest: None,
             node_outputs: std::collections::HashMap::new(),
             human_inputs: std::collections::HashMap::new(),
         }

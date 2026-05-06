@@ -35,9 +35,12 @@ import {
   GitBranch,
   FileType,
 } from 'lucide-react';
-import { Header } from '@/components/Header';
+import { AuthenticatedWorkspaceFrame } from '@/components/AuthenticatedWorkspaceFrame';
 import { ReactFlowCommandMenu } from '@/components/ReactFlowCommandMenu';
 import { useKanbanStore } from '@/store';
+import { toRustDagGraph } from '@/hermes/tauriWorkflowRun';
+import { invokeDagPublishGraph } from '@/hermes/dagPublishInvoke';
+import { resolveBundleAuditForAdHocGraph } from '@/hermes/resolveWorkflowBundle';
 import { getNativeLlmPaths, isTauriRuntime } from '@/config/nativeLlm';
 import { defaultLlamaSamplingPayload } from '@/llm/llamaSamplingDefaults';
 import { CustomTaskNode } from '@/components/CustomTaskNode';
@@ -140,18 +143,6 @@ function buildStableFlowNodes(
     }
     return toFlowNode(dag, selected);
   });
-}
-
-function toRustGraph(nodes: (PlaygroundDagNode | AgentDagNode)[], edges: AgentDagEdge[]) {
-  return {
-    nodes: nodes.map((node) => {
-      const { position, subGraph, ...rest } = node as PlaygroundDagNode;
-      void position;
-      void subGraph;
-      return rest as AgentDagNode;
-    }),
-    edges,
-  };
 }
 
 function buildLlamaOptions(placeholderPrompt: string) {
@@ -878,10 +869,27 @@ function PlaygroundInner({ sidebarCollapsed }: PlaygroundScreenProps) {
       appendLog('Sync skipped: not in Tauri');
       return;
     }
-    const { invoke } = await import('@tauri-apps/api/core');
     const { nodes, edges } = getSandboxGraph();
+    const agentNodes = nodes.map((node) => {
+      const { position, subGraph, ...rest } = node as PlaygroundDagNode;
+      void position;
+      void subGraph;
+      return rest as AgentDagNode;
+    });
+    const state = useKanbanStore.getState();
     try {
-      await invoke('dag_publish_graph', { graph: toRustGraph(nodes, edges) });
+      const audit = await resolveBundleAuditForAdHocGraph({
+        projectId: state.activeProject?.id ?? null,
+        graph: { nodes: agentNodes, edges },
+        embeddedWorkflowBundles: state.embeddedWorkflowBundles,
+        workflowBundlePins: state.workflowBundlePins,
+      });
+      await invokeDagPublishGraph({
+        graph: toRustDagGraph(agentNodes, edges),
+        bundleId: audit.bundleId,
+        bundleVersion: audit.bundleVersion,
+        contentDigest: audit.contentDigest,
+      });
       appendLog('Sandbox graph published to Rust orchestrator');
     } catch (e) {
       appendLog(`dag_publish_graph error: ${String(e)}`);
@@ -896,8 +904,26 @@ function PlaygroundInner({ sidebarCollapsed }: PlaygroundScreenProps) {
     setBusy(true);
     const { invoke } = await import('@tauri-apps/api/core');
     const { nodes, edges } = getSandboxGraph();
+    const agentNodes = nodes.map((node) => {
+      const { position, subGraph, ...rest } = node as PlaygroundDagNode;
+      void position;
+      void subGraph;
+      return rest as AgentDagNode;
+    });
+    const state = useKanbanStore.getState();
     try {
-      await invoke('dag_publish_graph', { graph: toRustGraph(nodes, edges) });
+      const audit = await resolveBundleAuditForAdHocGraph({
+        projectId: state.activeProject?.id ?? null,
+        graph: { nodes: agentNodes, edges },
+        embeddedWorkflowBundles: state.embeddedWorkflowBundles,
+        workflowBundlePins: state.workflowBundlePins,
+      });
+      await invokeDagPublishGraph({
+        graph: toRustDagGraph(agentNodes, edges),
+        bundleId: audit.bundleId,
+        bundleVersion: audit.bundleVersion,
+        contentDigest: audit.contentDigest,
+      });
       const needsLocal = nodes.some((n) => n.executionTarget === 'localQvac');
       const llamaOptions = needsLocal
         ? buildLlamaOptions('System: placeholder\nUser: hi\nAssistant: ')
@@ -1047,13 +1073,8 @@ function PlaygroundInner({ sidebarCollapsed }: PlaygroundScreenProps) {
   }, []);
 
   return (
-    <div
-      className={`min-h-screen transition-all duration-300 ${
-        sidebarCollapsed ? 'ml-16' : 'ml-64'
-      }`}
-    >
-      <Header sidebarCollapsed={sidebarCollapsed} showAgents={false} />
-      <main className="flex h-[calc(100vh-1rem)] flex-col gap-4 px-4 pb-8 pt-[88px]">
+    <AuthenticatedWorkspaceFrame sidebarCollapsed={sidebarCollapsed} showAgents={false}>
+      <main className="flex h-[calc(100vh-73px)] min-h-0 flex-col gap-4 px-4 pb-8">
         <div className="flex flex-wrap items-center gap-2">
           <h1 className="mr-4 flex flex-wrap items-center gap-x-2 gap-y-1 text-lg font-semibold text-gray-900 dark:text-white">
             <span className="flex items-center gap-2">
@@ -1331,7 +1352,7 @@ function PlaygroundInner({ sidebarCollapsed }: PlaygroundScreenProps) {
           </div>
         </div>
       </main>
-    </div>
+    </AuthenticatedWorkspaceFrame>
   );
 }
 

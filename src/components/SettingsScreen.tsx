@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Bell, MessageSquare, Database, Clock, User, Cpu } from 'lucide-react';
-import { Header } from './Header';
+import { AuthenticatedWorkspaceFrame } from '@/components/AuthenticatedWorkspaceFrame';
 import { managerProfiles, ManagerProfile } from '@/config/managerProfiles';
 import { getAirtable } from '@/airtableops';
 import { initializeExa } from '@/exaops';
@@ -216,10 +216,8 @@ export const SettingsScreen = ({ sidebarCollapsed, chatSidebarOpen, setChatSideb
   };
 
   return (
-    <>
-      <Header sidebarCollapsed={sidebarCollapsed} showAgents={false} />
-      <div className={`transition-all duration-300 pt-[73px] ${sidebarCollapsed ? 'pl-16' : 'pl-64'}`}>
-        <div className="max-w-2xl mx-auto py-6">
+    <AuthenticatedWorkspaceFrame sidebarCollapsed={sidebarCollapsed} showAgents={false}>
+      <div className="max-w-2xl mx-auto py-6">
           <div className="space-y-8">
             {/* Chat */}
             <section className="bg-white/50 dark:bg-slate-800/50 backdrop-blur-sm rounded-lg border border-violet-200/50 dark:border-violet-800/50 p-6">
@@ -458,7 +456,6 @@ export const SettingsScreen = ({ sidebarCollapsed, chatSidebarOpen, setChatSideb
             </section>
           </div>
         </div>
-      </div>
-    </>
+    </AuthenticatedWorkspaceFrame>
   );
 };

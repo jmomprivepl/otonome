@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Header } from './Header';
+import { AuthenticatedWorkspaceFrame } from '@/components/AuthenticatedWorkspaceFrame';
 import { ManagerProfile } from '@/config/managerProfiles';
 import { useKanbanStore } from '@/store';
 import { useNavigate } from 'react-router-dom';
@@ -123,9 +123,8 @@ export const Dashboard = ({ sidebarCollapsed, officeManager, setOfficeManager, c
     count: tasks.filter(t => t.assignedAgents.includes(agent.id)).length
   })).sort((a, b) => b.count - a.count).slice(0, 3);
   return (
-    <div>
-      <Header sidebarCollapsed={sidebarCollapsed} />
-      <div className={`transition-all duration-300 pt-[73px] ${sidebarCollapsed ? 'pl-16' : 'pl-64'}`}>
+    <>
+      <AuthenticatedWorkspaceFrame sidebarCollapsed={sidebarCollapsed}>
         <div className="max-w-7xl mx-auto p-6 space-y-6">
           {/* Top row - Office Manager and Overview */}
           <div className="grid grid-cols-1 md:grid-cols-12 gap-4 sm:gap-6">
@@ -276,7 +275,7 @@ export const Dashboard = ({ sidebarCollapsed, officeManager, setOfficeManager, c
             ))}
           </div>
         </div>
-      </div>
+      </AuthenticatedWorkspaceFrame>
 
       {/* Manager Selection Modal */}
       <ManagerSelectionModal
@@ -285,6 +284,6 @@ export const Dashboard = ({ sidebarCollapsed, officeManager, setOfficeManager, c
         onSelect={handleManagerSelect}
         currentManager={officeManager}
       />
-    </div>
+    </>
   );
 };

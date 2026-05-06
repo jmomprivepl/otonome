@@ -1,14 +1,23 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { X, UserCheck } from 'lucide-react';
-import type { HumanReviewPayload } from '@/types/agentDag';
+import type { HumanReviewPayload, HitlModalVariant } from '@/types/agentDag';
+import { cn } from '@/lib/utils';
+import { useBodyScrollLock } from '@/hooks/useBodyScrollLock';
+import { useFocusContainment } from '@/hooks/useFocusContainment';
 
 interface HumanReviewModalProps {
   payload: HumanReviewPayload;
   onSubmit: (approved: boolean, notes: string) => void;
+  variant?: HitlModalVariant;
 }
 
-export function HumanReviewModal({ payload, onSubmit }: HumanReviewModalProps) {
+export function HumanReviewModal({ payload, onSubmit, variant = 'standard' }: HumanReviewModalProps) {
   const [notes, setNotes] = useState('');
+  const urgent = variant === 'timeSensitive';
+  const rootRef = useRef<HTMLDivElement>(null);
+
+  useBodyScrollLock(true);
+  useFocusContainment(urgent, rootRef);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -19,9 +28,30 @@ export function HumanReviewModal({ payload, onSubmit }: HumanReviewModalProps) {
   }, [onSubmit, notes]);
 
   return (
-    <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/50 backdrop-blur-sm dark:bg-black/70">
-      <div className="mx-4 max-h-[90vh] w-full max-w-2xl overflow-hidden rounded-2xl bg-white shadow-xl dark:bg-slate-800">
+    <div
+      ref={rootRef}
+      role="dialog"
+      aria-modal="true"
+      className={cn(
+        'fixed inset-0 flex items-center justify-center',
+        urgent ? 'z-[110] bg-black/60 backdrop-blur-md dark:bg-black/75' : 'z-[70] bg-black/50 backdrop-blur-sm dark:bg-black/70',
+      )}
+    >
+      {urgent ? (
+        <span className="sr-only">Time-sensitive human review gate. Please approve or reject to unblock the workflow.</span>
+      ) : null}
+      <div
+        className={cn(
+          'mx-4 max-h-[90vh] w-full max-w-2xl overflow-hidden rounded-2xl bg-white shadow-xl dark:bg-slate-800',
+          urgent && 'ring-2 ring-amber-400/90 shadow-2xl ring-offset-2 ring-offset-slate-950/20 dark:ring-amber-500/80',
+        )}
+      >
         <div className="max-h-[90vh] overflow-y-auto p-6">
+          {urgent ? (
+            <p className="mb-4 rounded-lg border border-amber-300/60 bg-amber-50 px-3 py-1.5 text-center text-[11px] font-semibold uppercase tracking-wide text-amber-950 dark:border-amber-600/50 dark:bg-amber-950/50 dark:text-amber-100">
+              Time-sensitive review — workflow is waiting
+            </p>
+          ) : null}
           <div className="mb-4 flex items-center justify-between">
             <div className="flex items-center gap-2">
               <UserCheck className="h-6 w-6 text-amber-600 dark:text-amber-400" />
@@ -36,8 +66,7 @@ export function HumanReviewModal({ payload, onSubmit }: HumanReviewModalProps) {
             </button>
           </div>
           <p className="mb-2 text-xs text-gray-500 dark:text-gray-400">
-            Run <span className="font-mono">{payload.runId}</span> — node{' '}
-            <span className="font-mono">{payload.nodeId}</span>
+            Run <span className="font-mono">{payload.runId}</span> — node <span className="font-mono">{payload.nodeId}</span>
           </p>
           <p className="mb-4 text-sm text-gray-800 dark:text-gray-200">{payload.instructions}</p>
           <details className="mb-4 rounded-lg border border-gray-200 bg-gray-50 p-3 text-xs dark:border-slate-600 dark:bg-slate-900/60">

@@ -26,27 +26,44 @@ export interface AgentDagEdge {
   target: string;
 }
 
-export interface ActionPendingPayload {
+/**
+ * §8.2–8.3 optional fields from Tauri (camelCase) or inferred in `AgentHitlBridge` when absent.
+ * `timeSensitivityRule` records which product rule fired for analytics/tuning.
+ */
+export interface HitlSensitivityMeta {
+  /** When true, HITL modal uses elevated prominence; item remains in monitoring column too (not a second queue). */
+  timeSensitive?: boolean;
+  timeSensitivityRule?: string;
+  destructive?: boolean;
+  category?: string;
+  slaSecondsRemaining?: number;
+  riskScore?: number;
+}
+
+export interface ActionPendingPayload extends HitlSensitivityMeta {
   id: string;
   toolName: string;
   argsSummary: string;
   nodeId: string | null;
 }
 
-export interface ClarificationPayload {
+export interface ClarificationPayload extends HitlSensitivityMeta {
   id: string;
   question: string;
   options: string[];
   nodeId: string | null;
 }
 
-export interface HumanReviewPayload {
+export interface HumanReviewPayload extends HitlSensitivityMeta {
   id: string;
   runId: string;
   nodeId: string;
   instructions: string;
   stateSnapshot: Record<string, unknown>;
 }
+
+/** §8.2 HITL modal presentation: time-sensitive items stack above the §7 drawer (`z-[110]`) with ring + stronger backdrop. */
+export type HitlModalVariant = 'standard' | 'timeSensitive';
 
 export interface SopRaci {
   r: string;

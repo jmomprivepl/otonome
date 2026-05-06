@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Header } from '@/components/Header';
+import { AuthenticatedWorkspaceFrame } from '@/components/AuthenticatedWorkspaceFrame';
 import type { ManagerProfile } from '@/config/managerProfiles';
 import { useKanbanStore } from '@/store';
 import type { AgentProfile } from '@/config/agentProfiles';
@@ -86,6 +86,7 @@ export function NsdarCommandCenter({
   const [hermesProgress, setHermesProgress] = useState<HermesUiSnapshot | null>(null);
   const [baseModelOnly, setBaseModelOnly] = useState(false);
   const agents = useKanbanStore((s) => s.agents);
+  const activeProjectId = useKanbanStore((s) => s.activeProject?.id ?? null);
   const [finetuneMode, setFinetuneMode] = useState<FinetuneAgentMode>('existing');
   const [selectedAgentId, setSelectedAgentId] = useState('');
   const [customSystemPrompt, setCustomSystemPrompt] = useState('');
@@ -254,11 +255,16 @@ export function NsdarCommandCenter({
           {
             userPrompt: prompt,
             finetunePersonaSystem: resolvePass2PersonaForRequest(),
+            activeProjectId: activeProjectId ?? null,
           },
           {
             engine,
             onProgress: setHermesProgress,
             getPersistedWorkflowSops: () => useKanbanStore.getState().agentSops,
+            getWorkflowBundleContext: () => ({
+              embeddedWorkflowBundles: useKanbanStore.getState().embeddedWorkflowBundles,
+              workflowBundlePins: useKanbanStore.getState().workflowBundlePins,
+            }),
             onTraceLog: (line) => appendLog([line]),
           },
         );
@@ -275,11 +281,16 @@ export function NsdarCommandCenter({
           {
             userPrompt: prompt,
             finetunePersonaSystem: resolvePass2PersonaForRequest(),
+            activeProjectId: activeProjectId ?? null,
           },
           {
             engine,
             onProgress: setHermesProgress,
             getPersistedWorkflowSops: () => useKanbanStore.getState().agentSops,
+            getWorkflowBundleContext: () => ({
+              embeddedWorkflowBundles: useKanbanStore.getState().embeddedWorkflowBundles,
+              workflowBundlePins: useKanbanStore.getState().workflowBundlePins,
+            }),
             onTraceLog: (line) => appendLog([line]),
           },
         );
@@ -295,6 +306,7 @@ export function NsdarCommandCenter({
       setBusy(false);
     }
   }, [
+    activeProjectId,
     adaptersDir,
     appendLog,
     baseModelOnly,
@@ -310,8 +322,7 @@ export function NsdarCommandCenter({
 
   return (
     <div className="min-h-screen bg-slate-100 dark:bg-slate-900">
-      <Header sidebarCollapsed={sidebarCollapsed} />
-      <div className={`transition-all duration-300 pt-[73px] ${sidebarCollapsed ? 'pl-16' : 'pl-64'}`}>
+      <AuthenticatedWorkspaceFrame sidebarCollapsed={sidebarCollapsed}>
         <div className="h-[calc(100vh-73px)] p-3 sm:p-4 flex flex-col xl:flex-row gap-3 sm:gap-4 max-w-[1920px] mx-auto">
           {/* Left ~50% */}
           <div className="flex-1 min-w-0 min-h-[40vh] xl:w-1/2 xl:max-w-[50%]">
@@ -416,7 +427,7 @@ export function NsdarCommandCenter({
             </div>
           </div>
         </div>
-      </div>
+      </AuthenticatedWorkspaceFrame>
     </div>
   );
 }

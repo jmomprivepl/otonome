@@ -1,5 +1,5 @@
 import { useCallback, useReducer } from 'react';
-import { handleUserRequest } from '@/hermes/handleUserRequest';
+import { handleUserRequest, type WorkflowBundleStoreSlice } from '@/hermes/handleUserRequest';
 import type { PersistedWorkflowSop } from '@/hermes/workflowDag';
 import type {
   HermesOrchestrationResult,
@@ -13,6 +13,7 @@ const idleSnapshot: HermesUiSnapshot = {
   phase: 'idle',
   headline: 'Awaiting input…',
   sopSteps: null,
+  platformRoute: null,
 };
 
 type OrchestrationState = {
@@ -52,6 +53,7 @@ function reduce(state: OrchestrationState, action: Action): OrchestrationState {
 
 export type UseHermesOrchestrationOptions = {
   getPersistedWorkflowSops?: () => PersistedWorkflowSop[];
+  getWorkflowBundleContext?: () => WorkflowBundleStoreSlice;
 };
 
 export function useHermesOrchestration(
@@ -68,6 +70,7 @@ export function useHermesOrchestration(
           engine,
           onProgress: (snap) => dispatch({ type: 'SET_SNAPSHOT', snapshot: snap }),
           getPersistedWorkflowSops: options?.getPersistedWorkflowSops,
+          getWorkflowBundleContext: options?.getWorkflowBundleContext,
         });
         dispatch({ type: 'DONE', result });
         return result;
@@ -88,7 +91,7 @@ export function useHermesOrchestration(
         return fallback;
       }
     },
-    [engine, options?.getPersistedWorkflowSops],
+    [engine, options?.getPersistedWorkflowSops, options?.getWorkflowBundleContext],
   );
 
   return {

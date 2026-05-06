@@ -1,0 +1,458 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Otonome — Delegation Hub wireframes</title>
+  <style>
+    :root {
+      --ink: #1e293b;
+      --muted: #64748b;
+      --line: #cbd5e1;
+      --panel: #f8fafc;
+      --accent: #7c3aed;
+      --warn: #f59e0b;
+      --bad: #dc2626;
+      --ok: #059669;
+      font-family: ui-sans-serif, system-ui, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      padding: 24px;
+      color: var(--ink);
+      background: #eef2ff;
+      line-height: 1.45;
+    }
+    h1 { font-size: 1.35rem; margin: 0 0 8px; }
+    p.lead { margin: 0 0 20px; color: var(--muted); max-width: 72ch; }
+    .controls {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-bottom: 20px;
+      align-items: center;
+    }
+    .controls button {
+      cursor: pointer;
+      border: 1px solid var(--line);
+      background: #fff;
+      border-radius: 10px;
+      padding: 8px 14px;
+      font-weight: 600;
+      color: var(--ink);
+    }
+    .controls button[aria-pressed="true"] {
+      border-color: var(--accent);
+      color: var(--accent);
+      background: #f5f3ff;
+    }
+    .hint { font-size: 0.82rem; color: var(--muted); }
+    .frames { display: grid; gap: 20px; }
+    .frame-shell {
+      border: 2px dashed var(--line);
+      border-radius: 14px;
+      overflow: hidden;
+      background: #fff;
+      box-shadow: 0 8px 26px rgba(15, 23, 42, 0.06);
+    }
+    .frame-caption {
+      padding: 10px 14px;
+      background: #fafafa;
+      border-bottom: 1px solid var(--line);
+      font-size: 0.85rem;
+      font-weight: 700;
+    }
+    .viewport {
+      padding: 14px;
+      overflow: auto;
+      background: #fff;
+    }
+
+    /* Generic layout blocks */
+    .layout {
+      display: grid;
+      gap: 10px;
+      align-items: stretch;
+    }
+    .layout.hub-wide {
+      grid-template-columns: 156px minmax(420px, 2.2fr) minmax(260px, 1fr);
+      grid-template-rows: 52px 6px minmax(340px, 520px);
+      grid-template-areas:
+        "side top top"
+        "side rule rule"
+        "side hermes context";
+    }
+    .layout.focus-narrow {
+      grid-template-columns: 1fr;
+      grid-template-rows: 44px auto 1fr;
+      grid-template-areas:
+        "strip"
+        "rule"
+        "workspace";
+    }
+
+    .sidebar {
+      grid-area: side;
+      border: 1px dashed var(--line);
+      border-radius: 10px;
+      background: var(--panel);
+      padding: 10px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      font-size: 0.78rem;
+      color: var(--muted);
+    }
+    .nav-pill {
+      border: 1px dashed var(--line);
+      padding: 8px 10px;
+      border-radius: 10px;
+      background: #fff;
+    }
+    .nav-pill.strong {
+      border-color: rgba(124, 58, 237, 0.45);
+      color: var(--accent);
+      font-weight: 700;
+    }
+    .topbar {
+      grid-area: top;
+      border: 1px dashed var(--line);
+      border-radius: 10px;
+      background: #fff;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 10px 14px;
+      font-size: 0.82rem;
+      color: var(--muted);
+      display: none;
+    }
+    .layout.hub-wide .topbar {
+      display: none;
+    }
+
+    .horizontal-rule {
+      grid-area: rule;
+      border-top: 2px dotted var(--line);
+      height: 2px;
+      opacity: 0.8;
+    }
+
+    .hermes {
+      grid-area: hermes;
+      border: 2px dashed rgba(124, 58, 237, 0.45);
+      border-radius: 12px;
+      padding: 12px;
+      background: #faf5ff;
+      min-height: 340px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+    .context {
+      grid-area: context;
+      border: 2px dashed rgba(16, 185, 129, 0.35);
+      border-radius: 12px;
+      padding: 12px;
+      background: #ecfdf5;
+      min-height: 340px;
+      display: grid;
+      gap: 10px;
+      grid-template-rows: auto auto 1fr auto;
+    }
+    .label {
+      font-size: 0.68rem;
+      font-weight: 800;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--muted);
+    }
+    .stack {
+      border: 1px dashed var(--line);
+      border-radius: 10px;
+      background: #fff;
+      padding: 10px;
+      font-size: 0.78rem;
+      color: var(--ink);
+    }
+
+    .composer {
+      margin-top: auto;
+      border-top: 2px dotted rgba(124, 58, 237, 0.35);
+      padding-top: 10px;
+    }
+    .fake-input {
+      height: 42px;
+      border: 1px dashed var(--line);
+      border-radius: 10px;
+      background: #fff;
+      display: flex;
+      align-items: center;
+      padding: 0 12px;
+      color: var(--muted);
+      font-size: 0.82rem;
+    }
+
+    .strip {
+      grid-area: strip;
+      border: 2px dashed rgba(245, 158, 11, 0.45);
+      border-radius: 12px;
+      background: #fffbeb;
+      padding: 10px 12px;
+      display: flex;
+      gap: 12px;
+      align-items: center;
+      justify-content: space-between;
+      font-size: 0.78rem;
+    }
+    .badges {
+      display: inline-flex;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+    .badge {
+      padding: 6px 10px;
+      border-radius: 999px;
+      border: 1px dashed var(--line);
+      background: #fff;
+      white-space: nowrap;
+    }
+    .badge.danger {
+      border-color: rgba(220, 38, 38, 0.45);
+      background: #fef2f2;
+      font-weight: 700;
+    }
+    .badge.count {
+      border-color: rgba(124, 58, 237, 0.35);
+      font-weight: 700;
+    }
+
+    .workspace {
+      grid-area: workspace;
+      border: 2px dashed rgba(59, 130, 246, 0.35);
+      border-radius: 12px;
+      padding: 12px;
+      background: #eff6ff;
+      min-height: 320px;
+      position: relative;
+    }
+    .workspace-title {
+      font-weight: 800;
+      font-size: 0.9rem;
+      margin-bottom: 8px;
+    }
+    .fake-canvas {
+      margin-top: 10px;
+      border: 1px dashed var(--line);
+      border-radius: 10px;
+      height: 260px;
+      background: repeating-linear-gradient(
+        45deg,
+        #ffffff,
+        #ffffff 10px,
+        #f8fafc 10px,
+        #f8fafc 20px
+      );
+      display: grid;
+      place-items: center;
+      color: var(--muted);
+      font-size: 0.85rem;
+      font-weight: 600;
+    }
+
+    .modal-overlay {
+      position: absolute;
+      inset: 22px 22px auto 22px;
+      border: 2px dashed rgba(220, 38, 38, 0.45);
+      border-radius: 12px;
+      background: rgba(255, 255, 255, 0.94);
+      backdrop-filter: blur(2px);
+      padding: 14px;
+      box-shadow: 0 16px 42px rgba(15, 23, 42, 0.14);
+    }
+    .modal-title { font-weight: 900; margin: 0 0 6px; }
+    .modal-body { color: var(--muted); font-size: 0.85rem; margin: 0 0 12px; }
+    .modal-actions { display: flex; gap: 10px; }
+
+    .pill-btn {
+      padding: 10px 14px;
+      border-radius: 12px;
+      border: 1px dashed var(--line);
+      background: #fff;
+      cursor: default;
+      font-weight: 700;
+      font-size: 0.78rem;
+    }
+    .pill-btn.primary {
+      border-color: rgba(124, 58, 237, 0.45);
+      color: var(--accent);
+    }
+    .pill-btn.ghost {
+      color: var(--muted);
+    }
+
+    /* hide states */
+    body[data-state="hub"] #state-focus,
+    body[data-state="focus"] #state-hub {
+      display: none;
+    }
+
+    .legend {
+      margin-top: 18px;
+      border: 1px dashed var(--line);
+      border-radius: 14px;
+      background: #fff;
+      padding: 14px;
+      max-width: min(1100px, 100%);
+    }
+    .legend h2 { margin: 0 0 10px; font-size: 1rem; }
+    .legend ul { margin: 0; padding-left: 18px; color: var(--muted); font-size: 0.9rem; }
+    .legend code { color: var(--ink); }
+  </style>
+</head>
+<body data-state="hub">
+
+  <h1>Delegation Hub — low-fidelity wireframes</h1>
+  <p class="lead">
+    Three states for discussion: <strong>A</strong> canonical hub at <code>/</code>,
+    <strong>B</strong> focus/minimized shell on a dense route under the breakpoint (approvals + counters remain),
+    <strong>B + modal</strong> time-sensitive approval surfaced without losing graph/board focus.
+  </p>
+
+  <div class="controls" role="group" aria-label="Wireframe state">
+    <button id="btn-hub" type="button" aria-pressed="true">A — Hub (full shell)</button>
+    <button id="btn-focus" type="button" aria-pressed="false">B — Focus route + narrow width</button>
+    <span class="hint">Toggle views (no real app logic).</span>
+  </div>
+
+  <div class="frames">
+    <div id="state-hub" class="frame-shell">
+      <div class="frame-caption">
+        A — Logged-in home (<code>/</code>): calm delegation + always-visible monitoring column
+      </div>
+      <div class="viewport">
+        <div class="layout hub-wide" aria-label="Delegation hub wireframe layout">
+          <aside class="sidebar">
+            <div class="label">Sidebar</div>
+            <div class="nav-pill strong">Delegate (home)</div>
+            <div class="nav-pill">Tasks · Projects · Agents …</div>
+            <div class="nav-pill">Settings</div>
+            <div style="margin-top:auto" class="nav-pill">
+              <strong>Hidden plumbing</strong><br />
+              Engine / hardware moved here (or “Advanced”) for SMEs.
+            </div>
+          </aside>
+
+          <section class="hermes" aria-label="Hermes conversational region">
+            <div class="label" style="color: var(--accent)">Hermes (front-and-center)</div>
+            <div class="stack">
+              Transcript: user request + routing explanation (lightweight, not log spam).
+            </div>
+            <div class="stack">
+              Optional: suggested next actions / “turn this into a tracked task”.
+            </div>
+            <div class="composer">
+              <div class="label" style="margin-bottom:6px">Composer</div>
+              <div class="fake-input">Ask Hermes to delegate work…</div>
+            </div>
+          </section>
+
+          <aside class="context" aria-label="Monitoring context column">
+            <div class="label" style="color: var(--ok)">Context column (persistent)</div>
+            <div class="stack">
+              <strong>Pending approvals</strong> (queue)<br />
+              <span style="color: var(--muted)">Card list; primary actions here for non-urgent items.</span>
+            </div>
+            <div class="stack">
+              <strong>Running SOPs</strong> (step summary, not full graph)<br />
+              <span style="color: var(--muted)">Collapsible step list; click opens run detail.</span>
+            </div>
+            <div class="stack">
+              <strong>Active executions</strong> (agents / async jobs)<br />
+              <span style="color: var(--muted)">Compact rows + status + ETA if known.</span>
+            </div>
+            <div class="stack" style="opacity: 0.95">
+              <strong>Integrity rule</strong>: never fully hide this column on non-focus routes at non-minimized widths.
+              <span style="color: var(--muted)">SME calm means “I can always see what’s delegated.”</span>
+            </div>
+          </aside>
+        </div>
+      </div>
+    </div>
+
+    <div id="state-focus" class="frame-shell">
+      <div class="frame-caption">
+        B — Focus route (example: SOP graph editor / dense board) + breakpoint: minimized shell with counters + approvals surface
+      </div>
+      <div class="viewport">
+        <div class="layout focus-narrow" aria-label="Focus route wireframe layout">
+          <header class="strip">
+            <div style="min-width: 0">
+              <div style="font-weight: 900; margin-bottom: 6px">Hermes · minimized strip</div>
+              <div style="color: var(--muted); font-size: 0.72rem;">
+                Expand restores full two-pane. Conversation pauses visually (not lost).
+              </div>
+            </div>
+            <div class="badges">
+              <span class="badge danger">Approvals <strong>3</strong></span>
+              <span class="badge count">Running SOPs <strong>2</strong></span>
+              <span class="badge count">Active jobs <strong>7</strong></span>
+              <span class="badge">Expand</span>
+            </div>
+          </header>
+
+          <div class="horizontal-rule"></div>
+
+          <main class="workspace">
+            <div class="workspace-title">
+              Screen-heavy workspace (canvas / dense board)
+            </div>
+            <div class="fake-canvas">
+              Graph / Kanban area uses maximum readable space.
+            </div>
+
+            <div class="modal-overlay" aria-label="Time-sensitive approval modal">
+              <div class="modal-title">Time-sensitive approval (lightweight modal)</div>
+              <p class="modal-body">
+                Appears in addition to the strip + queue. Copy stays short; evidence links open side panel.
+              </p>
+              <div class="modal-actions">
+                <span class="pill-btn primary">Approve</span>
+                <span class="pill-btn ghost">Reject</span>
+                <span class="pill-btn ghost">Snooze (if policy allows)</span>
+              </div>
+            </div>
+          </main>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <aside class="legend">
+    <h2>Legend / implementation notes (wireframe-level)</h2>
+    <ul>
+      <li><strong>Breakpoint</strong>: treat focus-mode as <code>max-width: 1280px</code> by default (tune with UX testing).</li>
+      <li><strong>Focus classes</strong>: canvas/graph editors + dense boards; exclude list/table-first layouts.</li>
+      <li><strong>Policy</strong>: define “time-sensitive approval” in product rules (destructive, regulated, timer, explicit risk score).</li>
+    </ul>
+  </aside>
+
+  <script>
+    const body = document.body;
+    const btnHub = document.getElementById('btn-hub');
+    const btnFocus = document.getElementById('btn-focus');
+    btnHub.addEventListener('click', () => {
+      body.dataset.state = 'hub';
+      btnHub.setAttribute('aria-pressed', 'true');
+      btnFocus.setAttribute('aria-pressed', 'false');
+    });
+    btnFocus.addEventListener('click', () => {
+      body.dataset.state = 'focus';
+      btnHub.setAttribute('aria-pressed', 'false');
+      btnFocus.setAttribute('aria-pressed', 'true');
+    });
+  </script>
+</body>
+</html>

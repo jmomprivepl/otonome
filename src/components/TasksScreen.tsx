@@ -2,7 +2,7 @@ import { type ReactNode, useState, useRef, useCallback } from 'react';
 import { TaskCard } from '@/components/TaskCard';
 import { TaskEditModal } from '@/components/TaskEditModal';
 import { TaskResultModal } from '@/components/TaskResultModal'
-import { Header } from '@/components/Header';
+import { AuthenticatedWorkspaceFrame } from '@/components/AuthenticatedWorkspaceFrame';
 import { TaskListView } from '@/components/TaskListView';
 import { CheckCircle2, Clock, ListTodo, Plus, Columns, List } from 'lucide-react';
 import { useKanbanStore } from '@/store';
@@ -688,8 +688,7 @@ Error: ${data.error || 'Unknown error'}`;
 
   return (
     <>
-      <Header sidebarCollapsed={sidebarCollapsed} />
-      <div className={`transition-all duration-300 pt-[73px] ${sidebarCollapsed ? 'pl-16' : 'pl-64'}`}>
+      <AuthenticatedWorkspaceFrame sidebarCollapsed={sidebarCollapsed}>
         <div className="mx-auto" 
           style={{ 
             maxWidth: 'min(1500px, 100%)',
@@ -807,7 +806,7 @@ Error: ${data.error || 'Unknown error'}`;
             )}
           </main>
         </div>
-      </div>
+      </AuthenticatedWorkspaceFrame>
 
       {editingTask && (
         <TaskEditModal

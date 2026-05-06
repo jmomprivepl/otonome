@@ -760,13 +760,16 @@ export function ChatSidebar({ isOpen, onClose, officeManager, input, setInput }:
     
     // Map screen names to routes
     const screenRoutes: Record<string, string> = {
-      'tasks': '/tasks',
-      'agents': '/agents',
-      'data': '/data',
-      'settings': '/settings',
-      'playground': '/playground',
+      tasks: '/tasks',
+      agents: '/agents',
+      data: '/data',
+      settings: '/settings',
+      playground: '/playground',
+      engine: '/engine',
       'agent-sop': '/agent-sop',
-      'sop': '/agent-sop',
+      sop: '/agent-sop',
+      delegate: '/',
+      hub: '/',
     };
     
     // Convert to lowercase for case-insensitive matching

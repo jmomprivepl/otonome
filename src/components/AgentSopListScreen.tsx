@@ -1,9 +1,8 @@
 import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { GitBranch, Pencil, Plus, Trash2, Workflow } from 'lucide-react';
-import { Header } from '@/components/Header';
+import { AuthenticatedWorkspaceFrame } from '@/components/AuthenticatedWorkspaceFrame';
 import { useKanbanStore } from '@/store';
-import { cn } from '@/lib/utils';
 
 interface AgentSopListScreenProps {
   sidebarCollapsed: boolean;
@@ -44,14 +43,9 @@ export function AgentSopListScreen({ sidebarCollapsed }: AgentSopListScreenProps
   };
 
   return (
-    <div
-      className={cn(
-        'min-h-screen transition-all duration-300',
-        sidebarCollapsed ? 'ml-16' : 'ml-64',
-      )}
-    >
-      <Header sidebarCollapsed={sidebarCollapsed} showAgents={false} />
-      <main className="flex flex-col gap-6 px-4 pb-12 pt-[88px]">
+    <div className="min-h-screen">
+      <AuthenticatedWorkspaceFrame sidebarCollapsed={sidebarCollapsed} showAgents={false}>
+        <main className="flex flex-col gap-6 px-4 pb-12 pt-4">
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div>
             <h1 className="flex items-center gap-2 text-lg font-semibold text-gray-900 dark:text-white">
@@ -149,7 +143,8 @@ export function AgentSopListScreen({ sidebarCollapsed }: AgentSopListScreenProps
             </ul>
           )}
         </div>
-      </main>
+        </main>
+      </AuthenticatedWorkspaceFrame>
     </div>
   );
 }

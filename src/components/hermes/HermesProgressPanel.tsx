@@ -36,6 +36,23 @@ export function HermesProgressPanel({ snapshot, busy }: HermesProgressPanelProps
   return (
     <div className="space-y-2" aria-live="polite">
       <div className={`text-center text-xs font-mono py-1.5 px-2 rounded-lg border ${pillClass}`}>{snapshot.headline}</div>
+      {snapshot.platformRoute ? (
+        <div className="text-center text-[10px] font-mono leading-snug py-1.5 px-2 rounded-md border border-amber-600/35 bg-amber-950/30 text-amber-100/95">
+          <span className="text-amber-400/90">platform</span>{' '}
+          <span className="text-amber-200">{snapshot.platformRoute.mode}</span>
+          {' · '}
+          conf {(snapshot.platformRoute.confidence * 100).toFixed(0)}%
+          {snapshot.platformRoute.sopBundleId ? (
+            <>
+              {' · '}
+              bundle <span className="text-slate-200">{snapshot.platformRoute.sopBundleId}</span>
+              {snapshot.platformRoute.sopVersion ? (
+                <span className="text-slate-400">@{snapshot.platformRoute.sopVersion}</span>
+              ) : null}
+            </>
+          ) : null}
+        </div>
+      ) : null}
       {snapshot.sopSteps && snapshot.sopSteps.length > 0 ? (
         <ul className="rounded-lg border border-slate-600/50 bg-slate-900/40 px-2 py-2 space-y-1.5 max-h-[160px] overflow-y-auto">
           {snapshot.sopSteps.map((s) => (

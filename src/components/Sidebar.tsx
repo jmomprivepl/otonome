@@ -1,8 +1,9 @@
 import { cn } from "@/lib/utils"
-import {  
-  ListTodo, 
-  Users, 
-  Settings, 
+import { isSidebarNavActive } from "@/lib/sidebarNav"
+import {
+  ListTodo,
+  Users,
+  Settings,
   LogOut,
   ChevronLeft,
   Database,
@@ -10,63 +11,43 @@ import {
   GitBranch,
   LayoutDashboard,
   Boxes,
-  Sparkles,
+  Home,
+  Cpu,
 } from "lucide-react"
-import { useState, useEffect } from "react"
+import { useState, useEffect, type ComponentType } from "react"
 import { useNavigate, useLocation } from "react-router-dom"
 import { useKanbanStore } from "@/store"
 import { useThemeStore } from '../themeStore';
 
-const sidebarItems = [
+type NavItem = { name: string; path: string; icon: ComponentType<{ className?: string }> };
+
+/** §5.2 Primary spine + workspace modules + Advanced (engine / playground). */
+const SIDEBAR_GROUPS: { label: string | null; items: NavItem[] }[] = [
   {
-    name: 'Overview',
-    icon: LayoutDashboard,
-    path: '/overview',
+    label: null,
+    items: [{ name: 'Delegate', path: '/', icon: Home }],
   },
   {
-    name: 'Tasks',
-    icon: ListTodo,
-    path: '/tasks'
+    label: 'Workspace',
+    items: [
+      { name: 'Overview', path: '/overview', icon: LayoutDashboard },
+      { name: 'Tasks', path: '/tasks', icon: ListTodo },
+      { name: 'Projects', path: '/projects', icon: FolderKanban },
+      { name: 'Agents', path: '/agents', icon: Users },
+      { name: 'Data', path: '/data', icon: Database },
+      { name: 'Agent SOP', path: '/agent-sop', icon: GitBranch },
+    ],
   },
   {
-    name: 'Projects',
-    icon: FolderKanban,
-    path: '/projects'
+    label: 'Advanced',
+    items: [
+      { name: 'Engine', path: '/engine', icon: Cpu },
+      { name: 'Playground', path: '/playground', icon: Boxes },
+    ],
   },
   {
-    name: 'Agents',
-    icon: Users,
-    path: '/agents'
-  },
-  {
-    name: 'Data',
-    icon: Database,
-    path: '/data'
-  },
-  {
-    name: 'Agent SOP',
-    icon: GitBranch,
-    path: '/agent-sop'
-  },
-  {
-    name: 'Playground',
-    icon: Boxes,
-    path: '/playground'
-  },
-  {
-    name: 'Agent Finetuning',
-    icon: Sparkles,
-    path: '/',
-  },
-  // {
-  //   name: 'Python Tools',
-  //   icon: Code,
-  //   path: '/python-tools'
-  // },
-  {
-    name: 'Settings',
-    icon: Settings,
-    path: '/settings'
+    label: null,
+    items: [{ name: 'Settings', path: '/settings', icon: Settings }],
   },
 ];
 
@@ -120,26 +101,38 @@ export function Sidebar({ onCollapsedChange }: SidebarProps) {
         </button>
       </div>
 
-      <nav className="flex-1 p-2">
-        {sidebarItems.map((item) => (
-          <button
-            key={item.name}
-            onClick={() => navigate(item.path)}
-            className={cn(
-              "w-full flex items-center gap-3 px-3 py-2 rounded-lg transition-colors",
-              location.pathname === item.path 
-                ? "bg-violet-100/50 dark:bg-blue-900/50 text-violet-900 dark:text-blue-100"
-                : "hover:bg-violet-100/50 dark:hover:bg-blue-900/50 text-gray-600 dark:text-gray-400"
-            )}
-          >
-            <item.icon className="h-5 w-5 flex-shrink-0" />
-            <span className={cn(
-              "font-medium transition-all duration-200",
-              collapsed ? "w-0 opacity-0" : "opacity-100"
-            )}>
-              {item.name}
-            </span>
-          </button>
+      <nav className="flex-1 overflow-y-auto p-2">
+        {SIDEBAR_GROUPS.map((group, gi) => (
+          <div key={gi} className={cn(gi > 0 && "mt-3 border-t border-violet-200/40 pt-3 dark:border-blue-800/40")}>
+            {group.label && !collapsed ? (
+              <div className="px-3 pb-2 text-[10px] font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-500">
+                {group.label}
+              </div>
+            ) : null}
+            {group.items.map((item) => (
+              <button
+                key={`${group.label ?? 'g'}-${item.path}`}
+                type="button"
+                onClick={() => navigate(item.path)}
+                className={cn(
+                  "w-full flex items-center gap-3 px-3 py-2 rounded-lg transition-colors",
+                  isSidebarNavActive(item.path, location.pathname)
+                    ? "bg-violet-100/50 dark:bg-blue-900/50 text-violet-900 dark:text-blue-100"
+                    : "hover:bg-violet-100/50 dark:hover:bg-blue-900/50 text-gray-600 dark:text-gray-400"
+                )}
+              >
+                <item.icon className="h-5 w-5 shrink-0" />
+                <span
+                  className={cn(
+                    "font-medium transition-all duration-200",
+                    collapsed ? "w-0 opacity-0" : "opacity-100"
+                  )}
+                >
+                  {item.name}
+                </span>
+              </button>
+            ))}
+          </div>
         ))}
       </nav>
 

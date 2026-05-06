@@ -70,6 +70,11 @@ export interface TaskContext {
   attachmentsMeta?: Record<string, unknown>;
   /** Links a DAG workflow run back to the Kanban task (optional). */
   taskId?: string;
+  /**
+   * Active workspace project id (`Project.id`) for embedded workflow bundle pin resolution.
+   * When unset, only the global pin (`_global`) applies.
+   */
+  activeProjectId?: string | null;
 }
 
 export type InferenceMode = 'sop_step' | 'sub_agent' | 'direct';
@@ -110,10 +115,21 @@ export interface SopExecutionStepState {
   total: number;
 }
 
+/** Output of `platformContracts.decideRoute` (Phase 1 classifier), surfaced in UI for SOP vs ad-hoc demos. */
+export interface PlatformRouteSnapshot {
+  mode: 'sop' | 'adhoc';
+  confidence: number;
+  rationaleTrace: string[];
+  sopBundleId?: string;
+  sopVersion?: string;
+}
+
 export interface HermesUiSnapshot {
   phase: HermesPhase;
   headline: string;
   sopSteps: SopExecutionStepState[] | null;
+  /** Platform classifier (`decideRoute`); shown live in HermesProgressPanel while busy. */
+  platformRoute: PlatformRouteSnapshot | null;
 }
 
 export type RouteDecision =
@@ -124,15 +140,6 @@ export type RouteDecision =
 export type HermesTraceEvent =
   | { type: 'log'; message: string }
   | { type: 'route'; decision: RouteDecision };
-
-/** Output of `platformContracts.decideRoute` (Phase 1 classifier), surfaced in UI for SOP vs ad-hoc demos. */
-export interface PlatformRouteSnapshot {
-  mode: 'sop' | 'adhoc';
-  confidence: number;
-  rationaleTrace: string[];
-  sopBundleId?: string;
-  sopVersion?: string;
-}
 
 export interface HermesOrchestrationResult {
   finalText: string;

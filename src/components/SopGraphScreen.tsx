@@ -16,7 +16,7 @@ import ReactFlow, {
 } from 'reactflow';
 import 'reactflow/dist/style.css';
 import { GitBranch, Play, Upload, FileJson, FileType } from 'lucide-react';
-import { Header } from '@/components/Header';
+import { AuthenticatedWorkspaceFrame } from '@/components/AuthenticatedWorkspaceFrame';
 import { ReactFlowCommandMenu } from '@/components/ReactFlowCommandMenu';
 import { useKanbanStore } from '@/store';
 import { getNativeLlmPaths, isTauriRuntime } from '@/config/nativeLlm';
@@ -24,6 +24,9 @@ import { defaultLlamaSamplingPayload } from '@/llm/llamaSamplingDefaults';
 import { SopDagNode } from '@/components/SopDagNode';
 import type { AgentDagEdge, AgentDagNode, NormalizedSop } from '@/types/agentDag';
 import { extractTextFromPdfArrayBuffer } from '@/lib/extractPdfText';
+import { toRustDagGraph } from '@/hermes/tauriWorkflowRun';
+import { invokeDagPublishGraph } from '@/hermes/dagPublishInvoke';
+import { resolveBundleAuditForAdHocGraph } from '@/hermes/resolveWorkflowBundle';
 
 const nodeTypes = { sopDag: SopDagNode };
 
@@ -83,18 +86,6 @@ function buildDagFromNormalizedSop(normalized: NormalizedSop): { nodes: AgentDag
     });
   }
   return { nodes, edges };
-}
-
-function toRustGraph(nodes: AgentDagNode[], edges: AgentDagEdge[]) {
-  return {
-    nodes: nodes.map(
-      ({
-        position: _p,
-        ...n
-      }) => n,
-    ),
-    edges,
-  };
 }
 
 function buildLlamaOptions(placeholderPrompt: string) {
@@ -493,10 +484,20 @@ function SopGraphInner({ sidebarCollapsed }: SopGraphScreenProps) {
       appendAgentDagLog('Sync skipped: not in Tauri');
       return;
     }
-    const { invoke } = await import('@tauri-apps/api/core');
     const state = useKanbanStore.getState();
     try {
-      await invoke('dag_publish_graph', { graph: toRustGraph(state.agentDagNodes, state.agentDagEdges) });
+      const audit = await resolveBundleAuditForAdHocGraph({
+        projectId: state.activeProject?.id ?? null,
+        graph: { nodes: state.agentDagNodes, edges: state.agentDagEdges },
+        embeddedWorkflowBundles: state.embeddedWorkflowBundles,
+        workflowBundlePins: state.workflowBundlePins,
+      });
+      await invokeDagPublishGraph({
+        graph: toRustDagGraph(state.agentDagNodes, state.agentDagEdges),
+        bundleId: audit.bundleId,
+        bundleVersion: audit.bundleVersion,
+        contentDigest: audit.contentDigest,
+      });
       appendAgentDagLog('Graph published to Rust orchestrator');
     } catch (e) {
       appendAgentDagLog(`dag_publish_graph error: ${String(e)}`);
@@ -512,7 +513,18 @@ function SopGraphInner({ sidebarCollapsed }: SopGraphScreenProps) {
     const { invoke } = await import('@tauri-apps/api/core');
     const state = useKanbanStore.getState();
     try {
-      await invoke('dag_publish_graph', { graph: toRustGraph(state.agentDagNodes, state.agentDagEdges) });
+      const audit = await resolveBundleAuditForAdHocGraph({
+        projectId: state.activeProject?.id ?? null,
+        graph: { nodes: state.agentDagNodes, edges: state.agentDagEdges },
+        embeddedWorkflowBundles: state.embeddedWorkflowBundles,
+        workflowBundlePins: state.workflowBundlePins,
+      });
+      await invokeDagPublishGraph({
+        graph: toRustDagGraph(state.agentDagNodes, state.agentDagEdges),
+        bundleId: audit.bundleId,
+        bundleVersion: audit.bundleVersion,
+        contentDigest: audit.contentDigest,
+      });
       const needsLocal = state.agentDagNodes.some((n) => n.executionTarget === 'localQvac');
       const llamaOptions = needsLocal
         ? buildLlamaOptions(
@@ -606,13 +618,8 @@ function SopGraphInner({ sidebarCollapsed }: SopGraphScreenProps) {
   }, [normalizedPreview, appendAgentDagLog]);
 
   return (
-    <div
-      className={`min-h-screen transition-all duration-300 ${
-        sidebarCollapsed ? 'ml-16' : 'ml-64'
-      }`}
-    >
-      <Header sidebarCollapsed={sidebarCollapsed} showAgents={false} />
-      <main className="flex h-[calc(100vh-1rem)] flex-col gap-4 px-4 pb-8 pt-[88px]">
+    <AuthenticatedWorkspaceFrame sidebarCollapsed={sidebarCollapsed} showAgents={false}>
+      <main className="flex h-[calc(100vh-73px)] min-h-0 flex-col gap-4 px-4 pb-8">
         <div className="flex flex-wrap items-center gap-3">
           <Link
             to="/agent-sop"
@@ -757,7 +764,7 @@ function SopGraphInner({ sidebarCollapsed }: SopGraphScreenProps) {
           </div>
         </div>
       </main>
-    </div>
+    </AuthenticatedWorkspaceFrame>
   );
 }
 

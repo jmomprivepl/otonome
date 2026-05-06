@@ -11,6 +11,10 @@ export interface WorkflowPublicSnapshot {
   userRequest: string;
   sopId?: string | null;
   taskId?: string | null;
+  /** Embedded workflow bundle audit (semver + SHA-256 of canonical graph). */
+  bundleId?: string | null;
+  bundleVersion?: string | null;
+  contentDigest?: string | null;
   nodeOutputs: Record<string, string>;
   humanInputs: Record<string, unknown>;
 }
@@ -24,16 +28,22 @@ export interface DagRunFinishedPayload {
 
 export function toRustDagGraph(nodes: AgentDagNode[], edges: AgentDagEdge[]) {
   return {
-    nodes: nodes.map(({ position: _p, ...n }) => ({
-      ...n,
-      nodeKind: n.nodeKind ?? 'agent',
-    })),
+    nodes: nodes.map((node) => {
+      const { position, ...n } = node;
+      void position;
+      return {
+        ...n,
+        nodeKind: n.nodeKind ?? 'agent',
+      };
+    }),
     edges,
   };
 }
 
+export type RustDagGraph = ReturnType<typeof toRustDagGraph>;
+
 export interface WorkflowRunStartInvokePayload {
-  graph: ReturnType<typeof toRustDagGraph>;
+  graph: RustDagGraph;
   llamaOptions: Record<string, unknown> | null;
   anthropicModel?: string | null;
   userRequest?: string | null;
@@ -41,6 +51,9 @@ export interface WorkflowRunStartInvokePayload {
   taskId?: string | null;
   hermesModel?: string | null;
   hermesMaxTurns?: number | null;
+  bundleId?: string | null;
+  bundleVersion?: string | null;
+  contentDigest?: string | null;
 }
 
 export async function runTauriWorkflowAndWait(payload: WorkflowRunStartInvokePayload): Promise<DagRunFinishedPayload> {

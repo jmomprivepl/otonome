@@ -10,7 +10,8 @@ import { decideRoute as platformClassifyRoute } from '@/domain/platformContracts
 import { isTauriRuntime, getNativeLlmPaths } from '@/config/nativeLlm';
 import { SOP_REGISTRY } from '@/hermes/registries';
 import type { PersistedWorkflowSop } from '@/hermes/workflowDag';
-import { resolveWorkflowGraphForSopId } from '@/hermes/workflowDag';
+import type { EmbeddedWorkflowBundleStore, WorkflowBundlePin } from '@/types/workflowBundle';
+import { resolveWorkflowGraphForSopExecution } from '@/hermes/resolveWorkflowBundle';
 import { runTauriWorkflowAndWait, toRustDagGraph } from '@/hermes/tauriWorkflowRun';
 import { formatHermesTraceLine } from '@/hermes/formatHermesTrace';
 import { defaultLlamaSamplingPayload } from '@/llm/llamaSamplingDefaults';
@@ -95,10 +96,17 @@ function checkSopRegistry(taskDescription: string): CheckSopRegistryResult {
 
 export type HermesProgressHandler = (snap: HermesUiSnapshot) => void;
 
+export interface WorkflowBundleStoreSlice {
+  embeddedWorkflowBundles: EmbeddedWorkflowBundleStore;
+  workflowBundlePins: Record<string, WorkflowBundlePin>;
+}
+
 export interface HandleUserRequestDeps {
   engine: InferenceEngine;
   onProgress: HermesProgressHandler;
   getPersistedWorkflowSops?: () => PersistedWorkflowSop[];
+  /** Bundle pins + embedded catalog; when omitted, pins resolve as empty (unpinned graphs only). */
+  getWorkflowBundleContext?: () => WorkflowBundleStoreSlice;
   /** When set (e.g. Command center telemetry), each trace event is mirrored immediately with correct timestamps. */
   onTraceLog?: (line: string) => void;
 }
@@ -109,7 +117,7 @@ export async function handleUserRequest(
 ): Promise<HermesOrchestrationResult> {
   const trace: HermesTraceEvent[] = [];
   let inferenceCallCount = 0;
-  const { engine, onProgress, getPersistedWorkflowSops, onTraceLog } = deps;
+  const { engine, onProgress, getPersistedWorkflowSops, getWorkflowBundleContext, onTraceLog } = deps;
   const pushTrace = (e: HermesTraceEvent) => {
     trace.push(e);
     onTraceLog?.(formatHermesTraceLine(e));
@@ -130,6 +138,13 @@ export async function handleUserRequest(
       phase: partial.phase,
       headline: partial.headline ?? headlineForPhase(partial.phase, { kind: 'direct' }),
       sopSteps: partial.sopSteps ?? null,
+      platformRoute: {
+        mode: platformRoute.mode,
+        confidence: platformRoute.confidence,
+        rationaleTrace: platformRoute.rationaleTrace,
+        sopBundleId: platformRoute.sopBundleId,
+        sopVersion: platformRoute.sopVersion,
+      },
     };
     onProgress(snap);
   };
@@ -182,10 +197,26 @@ export async function handleUserRequest(
       }
 
       if (isTauriRuntime()) {
-        const graph = resolveWorkflowGraphForSopId(decision.sopId, getPersistedWorkflowSops);
-        if (!graph) {
-          throw new Error(`Cannot resolve workflow graph for SOP ${decision.sopId}`);
-        }
+        const bundleCtx = getWorkflowBundleContext?.() ?? {
+          embeddedWorkflowBundles: {},
+          workflowBundlePins: {},
+        };
+        const getAgentSops =
+          getPersistedWorkflowSops ?? (() => [] as PersistedWorkflowSop[]);
+        const resolved = await resolveWorkflowGraphForSopExecution({
+          sopId: decision.sopId,
+          platformBundleId: platformRoute.sopBundleId,
+          platformBundleVersion: platformRoute.sopVersion,
+          projectId: task.activeProjectId ?? null,
+          getAgentSops,
+          embeddedWorkflowBundles: bundleCtx.embeddedWorkflowBundles,
+          workflowBundlePins: bundleCtx.workflowBundlePins,
+        });
+        const graph = resolved.graph;
+        pushTrace({
+          type: 'log',
+          message: `> workflow_bundle: resolution=${resolved.resolution} bundleId=${resolved.bundleId} semver=${resolved.bundleVersion} digest=${resolved.contentDigest.slice(0, 12)}…`,
+        });
         const sopSteps = graph.nodes.map((n, i) => ({
           id: n.id,
           label: n.label,
@@ -217,6 +248,9 @@ export async function handleUserRequest(
           taskId: task.taskId ?? null,
           hermesModel: null,
           hermesMaxTurns: null,
+          bundleId: resolved.bundleId,
+          bundleVersion: resolved.bundleVersion,
+          contentDigest: resolved.contentDigest,
         });
 
         pushTrace({

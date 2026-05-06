@@ -69,10 +69,42 @@ export function OtonomeChat() {
   }, [model, maxTurns]);
 
   const getPersistedWorkflowSops = useCallback(() => useKanbanStore.getState().agentSops, []);
+  const getWorkflowBundleContext = useCallback(
+    () => ({
+      embeddedWorkflowBundles: useKanbanStore.getState().embeddedWorkflowBundles,
+      workflowBundlePins: useKanbanStore.getState().workflowBundlePins,
+    }),
+    [],
+  );
+  const activeProjectId = useKanbanStore((s) => s.activeProject?.id ?? null);
 
   const { snapshot, busy, runUserPrompt } = useHermesOrchestration(inferenceEngine, {
     getPersistedWorkflowSops,
+    getWorkflowBundleContext,
   });
+  const setDelegationHermesActivity = useKanbanStore((s) => s.setDelegationHermesActivity);
+
+  useEffect(() => {
+    setDelegationHermesActivity({
+      phase: snapshot.phase,
+      headline: snapshot.headline,
+      sopSteps: snapshot.sopSteps,
+      platformRoute: snapshot.platformRoute,
+      busy,
+    });
+  }, [
+    busy,
+    setDelegationHermesActivity,
+    snapshot.headline,
+    snapshot.phase,
+    snapshot.platformRoute,
+    snapshot.sopSteps,
+  ]);
+
+  useEffect(() => {
+    return () => setDelegationHermesActivity(null);
+  }, [setDelegationHermesActivity]);
+
   const pill = statusLabel(busy);
   const showHermesPanel = busy && snapshot.phase !== 'idle';
 
@@ -113,7 +145,10 @@ export function OtonomeChat() {
     setInput('');
     setMessages((m) => [...m, { id: newId(), role: 'user', content: prompt }]);
 
-    const result = await runUserPrompt({ userPrompt: prompt });
+    const result = await runUserPrompt({
+      userPrompt: prompt,
+      activeProjectId: activeProjectId ?? null,
+    });
     const logLines = formatHermesTrace(result.trace);
 
     setMessages((m) => [
@@ -134,7 +169,7 @@ export function OtonomeChat() {
     ]);
 
     void refreshHardware();
-  }, [busy, input, maxTurns, model, refreshHardware, runUserPrompt]);
+  }, [activeProjectId, busy, input, maxTurns, model, refreshHardware, runUserPrompt]);
 
   return (
     <div className="flex flex-col h-full min-h-[320px] rounded-xl border border-violet-200/50 dark:border-violet-800/50 bg-white/50 dark:bg-slate-800/50 backdrop-blur-sm overflow-hidden">
