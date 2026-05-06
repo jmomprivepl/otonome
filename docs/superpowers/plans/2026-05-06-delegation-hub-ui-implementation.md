@@ -2,29 +2,40 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Implement the approved [Delegation Hub UI spec](../specs/2026-05-06-delegation-hub-ui-design.md): global delegation shell (Hermes + monitoring) on logged-in workspace routes, hybrid minimized strip on focus-class routes below **1280px**, engine remains at **`/engine`**, and time-sensitive human-in-the-loop modals layered on existing HITL infrastructure.
+**Goal:** Implement the approved [Delegation Hub UI spec](../specs/2026-05-06-delegation-hub-ui-design.md): **home hub** Hermes + monitoring at **`/`**, hybrid **focus-route + narrow** chrome (**minimized strip** + expandable **drawer overlay**), engine at **`/engine`**, and **time-sensitive** HITL modals on top of existing infrastructure.
 
-**Architecture:** Introduce **pure routing rules** (`delegationShellRules`) tested with Vitest. Add a **delegation layout** above authenticated routes that renders **full three-region workspace** (Hermes column + monitoring column + page `Outlet`) or a **minimized top strip** with approval + count badges when rules fire. Lift **Hermes chat** (`OtonomeChat`) and **monitoring** (`DelegationMonitoringColumn`) into that layout so `/` only supplies “home workspace” chrome. Persist **Tasks board vs list** in the Kanban store so `/tasks` focus-class detection matches the spec. Extend HITL payloads or **wrappers** with a **`timeSensitive`** flag consumed by modal host to meet **§8** without duplicating queues.
+**Architecture (canonical — 2026-05 reconciled):** Use **pure routing rules** (`delegationShellRules` + **`useDelegationMinimizedChrome`** with `useViewportNarrow` against **`delegation/hubConstants.ts`**). **`DelegationHubScreen`** owns the calm **logged-in hub** (`OtonomeChat` + **`DelegationMonitoringColumn`**). **`DelegationShellChrome`** (mounted from **`App.tsx`**) overlays **strip + drawer** when **`delegationChromeHostActive`** (narrow viewport ∧ focus-class route); underlying route (Kanban graph, playground, tasks board, etc.) **stays mounted**. **`computeDelegationStripCounts`** feeds badge counts. **`tasksWorkspaceLayout`** in Zustand drives Tasks board-vs-list focus-class. **Outlet-based `DelegationAppShell`** (earlier sketch below) is **superseded** — do **not** implement it unless requirements change.
+
+**Time-sensitive HITL (§8.3):** **`AgentHitlBridge`** enriches Tauri payloads with **`withResolvedTimeSensitivity`** (`src/domain/hitlTimeSensitivity.ts`); modals receive **`variant="timeSensitive" | "standard"`** (higher **`z-index`**, stronger backdrop blur, amber ring/banner); monitoring column shows a **Time-sensitive** chip on queued items.
 
 **Tech Stack:** React 18, react-router-dom 7, TypeScript, Vite, Vitest (Node environment), Zustand, Tailwind 4, Tauri events for HITL.
 
 ---
 
-## File structure map (target)
+## File structure map (canonical)
 
 | File | Responsibility |
 | --- | --- |
-| `src/lib/delegationShellRules.ts` | Pure functions: focus-class route detection, minimize decision, badge count inputs. |
-| `src/lib/delegationShellRules.test.ts` | Vitest coverage for all rule branches. |
-| `src/store.ts` | New slices: `tasksWorkspaceLayout`, optional `delegationShellExpandedOverride`, HITL `timeSensitive` fields if needed. |
-| `src/components/delegation/DelegationAppShell.tsx` | Observes `pathname`, viewport width, store; renders full vs minimized chrome; hosts `Outlet` for page body. |
-| `src/components/delegation/DelegationMinimizedStrip.tsx` | Top strip UI: expand, approval signal, SOP/job counts. |
-| `src/components/delegation/DelegationHubHomeBody.tsx` | Replace inline hub body: short intro / empty state inside workspace region only. |
-| `src/components/delegation/DelegationHubScreen.tsx` | Thin wrapper or deleted after shell owns layout (keep route target stable during migration). |
-| `src/App.tsx` | Nest authenticated routes under `DelegationAppShell`; keep `Landing`, `Onboarding`, `Auth` outside. |
-| `src/components/TasksScreen.tsx` | Read/write `tasksWorkspaceLayout` in store when toggling Board/List. |
-| `src/components/AgentHitlBridge.tsx` (or modal components) | Gate **extra** prominence for `timeSensitive` approvals (§8.2). |
-| `src/types/agentDag.ts` | Optional `timeSensitive?: boolean` on pending payload types (backward compatible). |
+| `src/lib/delegationShellRules.ts` | Focus-class pathname rules; `TasksWorkspaceLayout`. |
+| `src/lib/delegationShellRules.test.ts` | Vitest for shell rules. |
+| `src/delegation/useDelegationMinimizedChrome.ts` | **`delegationChromeHostActive`** = narrow ∧ focus-class (`tasksWorkspaceLayout`). |
+| `src/delegation/useViewportNarrow.ts` | `matchMedia` gate for breakpoint. |
+| `src/delegation/hubConstants.ts` | `DELEGATION_SHELL_BREAKPOINT_PX` (1280). |
+| `src/components/delegation/DelegationHubScreen.tsx` | Route **`/`** hub: Hermes + monitoring chrome. |
+| `src/components/delegation/DelegationShellChrome.tsx` | Global minimized host: badges + **`DelegationMinimizedStrip`** / **`DelegationExpandedDrawer`**. |
+| `src/components/delegation/DelegationExpandedDrawer.tsx` | Full hub overlay over workspace (`z-[100]`); under time-sensitive modals (`z-[110]`). |
+| `src/components/delegation/DelegationMinimizedStrip.tsx` | Strip UI + Expand. |
+| `src/lib/delegationMonitoringCounts.ts` | `computeDelegationStripCounts`. |
+| `src/store.ts` | `tasksWorkspaceLayout`, delegation/DAG volatility, pending HITL payloads. |
+| `src/App.tsx` | Routes; **`DelegationShellChrome`** sibling; hides floating **`ChatSidebar`** when `delegationChromeHostActive`. |
+| `src/components/TasksScreen.tsx` | Board/list synced to **`tasksWorkspaceLayout`**. |
+| `src/domain/hitlTimeSensitivity.ts` | Infer **`timeSensitive`** + rule ID when backend omits flag. |
+| `src/domain/hitlTimeSensitivity.test.ts` | Rules unit tests. |
+| `src/components/AgentHitlBridge.tsx` | Tauri listeners → **`withResolvedTimeSensitivity`** → store → modals. |
+| `src/types/agentDag.ts` | `HitlSensitivityMeta`, **`HitlModalVariant`**. |
+| `ActionApprovalModal` / `ClarificationModal` / `HumanReviewModal` | `variant` visuals + focus containment when urgent. |
+
+**Superseded (do not implement as written):** `DelegationAppShell.tsx`, `DelegationHubHomeBody.tsx`, nested `Outlet` three-column shell in **`App.tsx`** — replaced by **`DelegationHubScreen` + DelegationShellChrome overlay** pattern above.
 
 ---
 
@@ -412,249 +423,38 @@ git commit -m "feat(delegation): derive minimized strip badge counts"
 
 ---
 
-### Task 6: Delegation expanded override in store
+### Task 6 *(superseded by overlay UX)* — store “force expanded”
 
-**Files:**
-- Modify: `src/store.ts`
-
-- [ ] **Step 1: Add persisted session flag**
-
-Add `delegationShellExpanded: boolean` default `false` and `setDelegationShellExpanded: (v: boolean) => void`.
-
-When **true**, `DelegationAppShell` passes `userExpandedOverride: true` into `shouldMinimizeDelegationShell` (Task 7).
-
-Alternatively use **sessionStorage** in the shell component only — store is simpler for prototyping.
-
-- [ ] **Step 2: Commit**
-
-```bash
-git add src/store.ts
-git commit -m "feat(delegation): allow user-expanded shell override"
-```
+An earlier spike used **`delegationShellForceExpanded`** in the store coupled to **`shouldMinimizeDelegationShell`**. That conflicted with **drawer-mounted** delegation chrome (unmounting killed in-flight drawer state). **Current code:** **`delegationChromeHostActive`** gates whether **`DelegationShellChrome`** mounts at all; **`drawerOpen`** hides the strip while keeping the host mounted — **no Zustand override required**. Keep this subsection as history only.
 
 ---
 
-### Task 7: DelegationAppShell layout + App.tsx nesting
+### Task 7 *(superseded)* — Outlet-based **`DelegationAppShell`**
 
-**Files:**
-- Create: `src/components/delegation/DelegationAppShell.tsx`
-- Modify: `src/App.tsx`
-- Modify: `src/components/delegation/DelegationHubScreen.tsx` (reduce to workspace-only body)
-- Create: `src/components/delegation/DelegationHubHomeBody.tsx`
-
-- [ ] **Step 1: Extract home body**
-
-Move the intro paragraphs from `DelegationHubScreen.tsx` into `DelegationHubHomeBody.tsx` — static content component.
-
-- [ ] **Step 2: Implement `DelegationAppShell`**
-
-Skeleton structure:
-
-```typescript
-import { Outlet, useLocation } from 'react-router-dom';
-import { useKanbanStore } from '@/store';
-import { Header } from '@/components/Header';
-import { OtonomeChat } from '@/components/OtonomeChat';
-import { DelegationMonitoringColumn } from '@/components/delegation/DelegationMonitoringColumn';
-import { DelegationMinimizedStrip } from '@/components/delegation/DelegationMinimizedStrip';
-import { useViewportInnerWidth } from '@/hooks/useViewportInnerWidth';
-import {
-  shouldMinimizeDelegationShell,
-} from '@/lib/delegationShellRules';
-import { computeDelegationStripCounts } from '@/lib/delegationMonitoringCounts';
-
-export function DelegationAppShell({
-  sidebarCollapsed,
-}: {
-  sidebarCollapsed: boolean;
-}) {
-  const { pathname } = useLocation();
-  const vw = useViewportInnerWidth();
-  const tasksWorkspaceLayout = useKanbanStore((s) => s.tasksWorkspaceLayout);
-  const delegationShellExpanded = useKanbanStore((s) => s.delegationShellExpanded);
-  const setDelegationShellExpanded = useKanbanStore((s) => s.setDelegationShellExpanded);
-
-  /* derive pending approvals count from existing HITL selectors — same predicates as DelegationMonitoringColumn uses */
-  const pendingAction = useKanbanStore((s) => s.pendingActionApproval);
-  const pendingClarification = useKanbanStore((s) => s.pendingClarification);
-  const pendingHuman = useKanbanStore((s) => s.pendingHumanReview);
-  const hermesActivity = useKanbanStore((s) => s.delegationHermesActivity);
-  const dag = useKanbanStore((s) => s.activeDagRun);
-
-  let pendingApprovalsCount = 0;
-  if (pendingAction != null) pendingApprovalsCount += 1;
-  if (pendingClarification != null) pendingApprovalsCount += 1;
-  if (pendingHuman != null) pendingApprovalsCount += 1;
-
-  const stripCounts = computeDelegationStripCounts({
-    pendingApprovalsCount,
-    hermesActivity: hermesActivity,
-    dag,
-  });
-
-  const minimized =
-    vw != null &&
-    shouldMinimizeDelegationShell(pathname, tasksWorkspaceLayout, vw, delegationShellExpanded);
-
-  return (
-    <div className="min-h-screen bg-slate-100 dark:bg-slate-900">
-      <Header sidebarCollapsed={sidebarCollapsed} />
-      <div className={`pt-[73px] transition-all duration-300 ${sidebarCollapsed ? 'pl-16' : 'pl-64'}`}>
-        {minimized ? (
-          <div className="flex min-h-[calc(100vh-73px)] min-w-0 flex-col">
-            <DelegationMinimizedStrip
-              {...stripCounts}
-              onExpand={() => setDelegationShellExpanded(true)}
-            />
-            <main className="min-h-0 flex-1 overflow-auto p-3 sm:p-4">
-              <Outlet />
-            </main>
-          </div>
-        ) : (
-          <div className="mx-auto flex min-h-[calc(100vh-73px)] max-w-[1920px] min-w-0 flex-col gap-0 lg:flex-row lg:items-stretch">
-            <section className="flex min-h-0 min-w-0 flex-1 flex-col p-3 sm:p-4">
-              <div className="mb-2 px-1">
-                <p className="text-[10px] uppercase tracking-wider text-slate-500 dark:text-slate-400">Delegate</p>
-              </div>
-              <div className="min-h-0 flex-1">
-                <OtonomeChat />
-              </div>
-            </section>
-            <aside className="min-h-0 w-full shrink-0 overflow-y-auto border-t border-violet-200/40 dark:border-violet-800/30 lg:w-auto lg:max-w-md lg:border-l lg:border-t-0 lg:pb-4 lg:pr-4">
-              <DelegationMonitoringColumn />
-            </aside>
-            <main className="hidden min-h-0 flex-1 min-w-[240px] flex-col gap-4 border-l border-violet-200/30 bg-white/40 p-3 dark:border-violet-800/20 dark:bg-slate-950/40 lg:flex lg:max-w-[min(920px,50vw)]">
-              <Outlet />
-            </main>
-          </div>
-        )}
-      </div>
-    </div>
-  );
-}
-```
-
-**Important layout correction:** The spec wants **Hermes center + monitoring + workspace**. On **wide screens**, typical order is **[Hermes | Monitoring | Outlet]** OR **[Hermes | stacked Monitoring+Outlet]** — align with designer QA. The snippet above puts **Outlet as third column** on `lg`; adjust Tailwind breakpoints if cramped.
-
-Provide **Collapse** control when expanded on narrow routes: add button in Hermes header area calling `setDelegationShellExpanded(false)`.
-
-Wire `DelegationHubScreen` route to render only `<DelegationHubHomeBody />` inside the shell Outlet.
-
-- [ ] **Step 3: Refactor `App.tsx` routes**
-
-Nest post-onboarding authenticated routes inside a wrapper:
-
-```typescript
-<Route element={isLoggedIn && showDashboard ? <DelegationAppShell sidebarCollapsed={sidebarCollapsed} /> : <Navigate to="/" />} >
-  <Route path="/" element={<DelegationHubHomeBody />} />
-  <Route path="/engine" element={<NsdarCommandCenter ... />} />
-  <Route path="/overview" element={<Dashboard ... />} />
-  {/* move remaining logged-in routes here */}
-</Route>
-```
-
-**Route props (office manager, chat toggles):** `App` cannot pass props through `<Outlet />` by default. Use **`<Outlet context={{ officeManager, setOfficeManager, chatSidebarOpen, setChatSidebarOpen }} />`** in `DelegationAppShell` and **`useOutletContext()`** in `NsdarCommandCenter`, `Dashboard`, and `SettingsScreen` (or a tiny typed hook `useAppShellOutletContext()`). Alternatively lift those into an existing React context provider — pick one pattern and use it consistently.
-
-**Reset expand override on navigation:** When `pathname` changes, set `delegationShellExpanded` back to `false` so each new screen re-evaluates minimize rules unless the user re-expands.
-
-**`/` home column:** If the three-column `lg` layout feels cramped for the hub, hide the third **Outlet** column on `pathname === '/'` and let **Hermes + monitoring** span as today; keep three columns for operational routes.
-
-**Floating ChatSidebar:** `hideFloatingChatRoutes` should expand to suppress duplicate chat wherever `OtonomeChat` appears in shell (likely **all routes inside shell**). Set `hideFloatingChatRoutes` to always hide when redesign complete, except verify `Landing`/`Auth`.
-
-- [ ] **Step 4: Run dev smoke**
-
-Run: `npm run dev`  
-Navigate `/`, `/tasks`, `/agent-sop/edit/x`, resize below 1280 — confirm strip toggles.
-
-- [ ] **Step 5: Run tests**
-
-Run: `npm test`  
-Expected: PASS
-
-- [ ] **Step 6: Commit**
-
-```bash
-git add src/components/delegation/DelegationAppShell.tsx src/components/delegation/DelegationHubHomeBody.tsx src/components/delegation/DelegationHubScreen.tsx src/App.tsx
-git commit -m "feat(delegation): add global DelegationAppShell with hybrid minimize"
-```
+~~The steps and React snippet below were the original blueprint.~~ **Canonical implementation:** **`DelegationHubScreen`** (route `/`) provides the SME hub Hermes + monitoring surface. **`DelegationShellChrome`** + **`DelegationExpandedDrawer`** + **`DelegationMinimizedStrip`** satisfy §7 hybrid minimize **without** wrapping every route in a three-column **`Outlet`**. **Retain per-route `Header` + padding** until a deliberate layout pass (**Task 8**) removes duplication independently of an AppShell.
 
 ---
 
-### Task 8: Header duplication and onboarding guard
+### Task 8: Header duplication (optional cleanup)
 
-**Files:**
-- Modify: `src/components/TasksScreen.tsx`, `ProjectsScreen.tsx`, `SopGraphScreen.tsx`, `PlaygroundScreen.tsx`, etc.
-
-- [ ] **Step 1: Remove per-screen `Header` + outer `pl-64/pt` wrappers**
-
-Once `DelegationAppShell` renders `Header` and padding, delete duplicate layout framing from children **only where the route is nested under the shell**. Keep `Landing`/`Onboarding` unaffected.
-
-Do this incrementally route-by-route to avoid breakage.
-
-- [ ] **Step 2: Commit per cluster**
-
-Prefer one commit per screen family (Tasks, Projects, SOP suite).
+Incremental removal of duplicated **`Header` / `ml-64`** wrappers on Tasks, Projects, SOP screens, etc., **only if** a shared chrome component is adopted. **Not blocked on** superseded Task 7.
 
 ---
 
-### Task 9: Time-sensitive approvals (§8.3 wiring)
+### Task 9: Time-sensitive approvals (§8.3) — **implemented**
 
-**Files:**
-- Modify: `src/types/agentDag.ts`
-- Modify: `src/components/AgentHitlBridge.tsx` or individual modals (`ActionApprovalModal.tsx`, etc.)
+**Status:** Complete in codebase (no further code changes required for Task 9 scope).
 
-- [ ] **Step 1: Extend payload types**
-
-```typescript
-/** When true, show additional lightweight blocking modal prominence (Delegation spec §8.2). */
-timeSensitive?: boolean;
-```
-
-Attach to `ActionPendingPayload`, `ClarificationPayload`, `HumanReviewPayload` optionally.
-
-Rust side can default absent field to undefined — frontend treats falsy as non-urgent.
-
-- [ ] **Step 2: Modal behavior**
-
-When `timeSensitive === true`, add **`modal` + `backdrop` semantics** (`aria-modal="true"` already if present): ensure **`role="dialog"`** traps focus briefly; stacking over minimized strip.
-
-When `false`, keep existing modals (still shown) but skip extra **backdrop blur / ring** affordance reserved for urgent class.
-
-Implement as a **`variant`** prop forwarded from bridge.
-
-- [ ] **Step 3: Product policy stub**
-
-Centralize heuristic in **`src/domain/hitlTimeSensitivity.ts`**:
-
-```typescript
-export function inferTimeSensitiveFromPayload(p: {
-  destructive?: boolean;
-  category?: string;
-  slaSecondsRemaining?: number;
-  riskScore?: number;
-}): boolean {
-  if (p.destructive) return true;
-  if (p.slaSecondsRemaining != null && p.slaSecondsRemaining < 120) return true;
-  if (p.riskScore != null && p.riskScore >= 0.85) return true;
-  if (p.category === 'regulated') return true;
-  return false;
-}
-```
-
-Call from event listeners **before** storing into Zustand when backend does not supply `timeSensitive`.
-
-- [ ] **Step 4: Test helper**
-
-Create `src/domain/hitlTimeSensitivity.test.ts` with table-driven expectations for `inferTimeSensitiveFromPayload`.
-
-- [ ] **Step 5: Commit**
-
-```bash
-git add src/types/agentDag.ts src/domain/hitlTimeSensitivity.ts src/domain/hitlTimeSensitivity.test.ts src/components/AgentHitlBridge.tsx
-git commit -m "feat(hitl): add time-sensitive approval highlighting"
-```
+| Area | Implementation |
+| --- | --- |
+| Types | **`HitlSensitivityMeta`** + **`HitlModalVariant`** in `src/types/agentDag.ts` |
+| Inference | **`inferTimeSensitiveFromPayload`** / **`withResolvedTimeSensitivity`** in `src/domain/hitlTimeSensitivity.ts`; tests in **`hitlTimeSensitivity.test.ts`** |
+| Bridge | **`AgentHitlBridge`** enriches Tauri payloads on ingest; **`logTimeSensitivityResolution`** for console analytics |
+| Modals | **`variant="timeSensitive"`** → `z-[110]`, heavier backdrop **`blur-md`**, amber **ring + banner**, **`useFocusContainment(true, …)`**; **`DelegationExpandedDrawer`** stays at **`z-[100]`** so urgent modals stack above hub overlay |
+| Column | **`DelegationMonitoringColumn`** shows **Time-sensitive** chip when `payload.timeSensitive` |
 
 ---
+
 
 ### Task 10: Documentation and regression checklist
 
@@ -679,20 +479,14 @@ git commit -m "docs(delegation): link implementation plan QA checklist"
 
 ---
 
-## Plan self-review (author)
+## Plan self-review (author, updated)
 
-1. **Spec coverage:** §5 routing (`/` hub, `/engine`) — Task 7; §6 full shell — Task 7; §7 hybrid minimize — Tasks 1–7; §8 approvals — existing column + Task 9; §9 tasks board vs list — Task 2; §10 a11y — ensure `DelegationMinimizedStrip` buttons have labels (add `aria-label` on Expand in Task 4 before merge).  
-2. **Placeholder scan:** No `TBD` steps; counts helper notes explicit limitation for multi-run future.  
-3. **Type consistency:** `TasksWorkspaceLayout` duplicated in `delegationShellRules` and store — **export type from rules file** and `import type` in `store.ts` in implementation to avoid drift.
+1. **Spec coverage:** §5–6 hub @ `/` + `/engine` — **`DelegationHubScreen`** + **`App.tsx`** routes; §7 hybrid minimize — **`DelegationShellChrome`** + breakpoint + **`tasksWorkspaceLayout`**; §8 column + escalated modal — **`DelegationMonitoringColumn`** + **`hitlTimeSensitivity`** + modal **`variant`**; Task 9 marked **implemented** above.
+2. **Superseded material:** Outlet **`DelegationAppShell`** removed from active plan; archival note in Tasks 6–7 sections.
+3. **Type consistency:** `TasksWorkspaceLayout` imported **`import type`** from `delegationShellRules` into `store.ts` — keep that pattern.
 
 ---
 
-## Execution handoff
+## Execution note
 
-**Plan complete and saved to `docs/superpowers/plans/2026-05-06-delegation-hub-ui-implementation.md`. Two execution options:**
-
-**1. Subagent-Driven (recommended)** — Dispatch a fresh subagent per task, review between tasks, fast iteration.
-
-**2. Inline Execution** — Execute tasks in this session using executing-plans, batch execution with checkpoints.
-
-**Which approach do you want?**
+Prior **subagent-driven** execution proceeded on branch **`feat/delegation-hub-shell`**. Subsequent work: **Task 8** (optional chrome dedupe) and **Task 10** (QA checklist + product-spec cross-links) as needed.
