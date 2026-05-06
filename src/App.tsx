@@ -3,6 +3,8 @@ import { Routes, Route, Navigate, useLocation, Outlet } from 'react-router-dom';
 import { Landing } from '@/components/Landing';
 import { AuthScreen } from '@/components/AuthScreen';
 import { useKanbanStore } from '@/store';
+import { useDelegationMinimizedChrome } from '@/delegation/useDelegationMinimizedChrome';
+import { DelegationShellChrome } from '@/components/delegation/DelegationShellChrome';
 import { MessageSquare, X } from 'lucide-react';
 import { ManagerProfile } from '@/config/managerProfiles';
 
@@ -10,6 +12,9 @@ import { ManagerProfile } from '@/config/managerProfiles';
 const Dashboard = lazy(() => import('@/components/Dashboard').then((m) => ({ default: m.Dashboard })));
 const NsdarCommandCenter = lazy(() =>
   import('@/components/nsdar/NsdarCommandCenter').then((m) => ({ default: m.NsdarCommandCenter })),
+);
+const DelegationHubScreen = lazy(() =>
+  import('@/components/delegation/DelegationHubScreen').then((m) => ({ default: m.DelegationHubScreen })),
 );
 const Onboarding = lazy(() => import('@/components/Onboarding').then((m) => ({ default: m.Onboarding })));
 const TasksScreen = lazy(() => import('@/components/TasksScreen').then((m) => ({ default: m.TasksScreen })));
@@ -61,10 +66,14 @@ function App({ sidebarCollapsed }: AppProps) {
   const [chatInput, setChatInput] = useState('');
   const location = useLocation();
   const [officeManager, setOfficeManager] = useState<ManagerProfile | null>(() => readOfficeManagerFromStorage());
+  const { delegationChromeHostActive } = useDelegationMinimizedChrome();
 
-  const hideChatRoutes = ['/agent-sop', '/playground'];
+  /** Hub embeds delegation chat; canvas routes hide the Office Manager drawer. */
+  const hideFloatingChatRoutes = ['/agent-sop', '/playground', '/'];
   const showChatSidebar =
-    isLoggedIn && !hideChatRoutes.some((p) => location.pathname === p || location.pathname.startsWith(`${p}/`));
+    isLoggedIn &&
+    !delegationChromeHostActive &&
+    !hideFloatingChatRoutes.some((p) => location.pathname === p || location.pathname.startsWith(`${p}/`));
   const showDashboard = window.localStorage.getItem('onboarded') === 'true';
 
   useEffect(() => {
@@ -82,13 +91,7 @@ function App({ sidebarCollapsed }: AppProps) {
             element={
               isLoggedIn ? (
                 showDashboard ? (
-                  <NsdarCommandCenter
-                    sidebarCollapsed={sidebarCollapsed}
-                    officeManager={officeManager}
-                    setOfficeManager={setOfficeManager}
-                    chatSidebarOpen={chatSidebarOpen}
-                    setChatSidebarOpen={setChatSidebarOpen}
-                  />
+                  <DelegationHubScreen sidebarCollapsed={sidebarCollapsed} />
                 ) : (
                   <Onboarding
                     sidebarCollapsed={sidebarCollapsed}
@@ -102,6 +105,26 @@ function App({ sidebarCollapsed }: AppProps) {
             }
           />
           <Route path="/auth" element={<AuthScreen />} />
+          <Route
+            path="/engine"
+            element={
+              isLoggedIn ? (
+                showDashboard ? (
+                  <NsdarCommandCenter
+                    sidebarCollapsed={sidebarCollapsed}
+                    officeManager={officeManager}
+                    setOfficeManager={setOfficeManager}
+                    chatSidebarOpen={chatSidebarOpen}
+                    setChatSidebarOpen={setChatSidebarOpen}
+                  />
+                ) : (
+                  <Navigate to="/" replace />
+                )
+              ) : (
+                <Navigate to="/" replace />
+              )
+            }
+          />
           <Route
             path="/overview"
             element={
@@ -193,6 +216,11 @@ function App({ sidebarCollapsed }: AppProps) {
           </Route>
         </Routes>
       </Suspense>
+
+      <DelegationShellChrome
+        enabled={isLoggedIn && showDashboard}
+        sidebarCollapsed={sidebarCollapsed}
+      />
 
       {showChatSidebar && (
         <>
