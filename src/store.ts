@@ -146,7 +146,10 @@ interface KanbanStore {
   activeDagRun: ActiveDagRunSnapshot | null;
   /** Volatile: Tasks screen board vs list layout (not persisted). */
   tasksWorkspaceLayout: TasksWorkspaceLayout;
+  /** Volatile: user override — prefer full delegation chrome over minimized strip (not persisted). */
+  delegationShellForceExpanded: boolean;
   setTasksWorkspaceLayout: (layout: TasksWorkspaceLayout) => void;
+  setDelegationShellForceExpanded: (v: boolean) => void;
   setDelegationHermesActivity: (v: DelegationHermesActivity | null) => void;
   syncActiveDagRunFromWorkflowSnapshot: (snap: WorkflowPublicSnapshot) => void;
   patchActiveDagRunNodeEvent: (ev: { nodeId: string; phase: string; detail?: string }) => void;
@@ -400,7 +403,9 @@ export const useKanbanStore = create<KanbanStore>()(
   delegationHermesActivity: null,
   activeDagRun: null,
   tasksWorkspaceLayout: 'board',
+  delegationShellForceExpanded: false,
   setTasksWorkspaceLayout: (layout) => set({ tasksWorkspaceLayout: layout }),
+  setDelegationShellForceExpanded: (v) => set({ delegationShellForceExpanded: v }),
   setDelegationHermesActivity: (v) => set({ delegationHermesActivity: v }),
   syncActiveDagRunFromWorkflowSnapshot: (snap) =>
     set((s) => {
