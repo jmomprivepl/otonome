@@ -1,5 +1,6 @@
 mod anthropic;
 mod dag_types;
+mod egress_policy;
 mod hermes_agent;
 mod hermes_claude;
 mod hermes_prompt;

@@ -70,13 +70,24 @@ fn execute_tool_gated(user_task: &str, name: &str, input: &Value) -> Result<Stri
 
 /// Blocking multi-turn session (Hermes pulse). Uses `reqwest::blocking` inside `hermes_claude`.
 pub fn run_agent_session(model: &str, user_task: &str, max_turns: u32) -> Result<HermesSessionResult, String> {
+    let limits = crate::egress_policy::default_limits();
+    let egress = crate::egress_policy::evaluate_user_task_for_cloud(user_task, limits);
+    if egress.disposition != crate::egress_policy::EgressDisposition::Allow {
+        return Err(format!(
+            "egress_denied: {}",
+            egress.reason_codes.join(",")
+        ));
+    }
+    let user_task_sanitized = egress
+        .sanitized_user_text
+        .ok_or_else(|| "egress_missing_sanitized_text".to_string())?;
     let hw = crate::hardware_preference::inference_hardware_snapshot();
     let client = crate::hermes_claude::http_client()?;
     let system = hermes_otonome_system_prompt();
     let tools = anthropic_tool_definitions();
     let mut messages: Vec<Value> = vec![json!({
         "role": "user",
-        "content": user_task.trim()
+        "content": user_task_sanitized.trim()
     })];
     let mut log: Vec<String> = Vec::new();
     let mut turns_used: u32 = 0;
@@ -106,7 +117,7 @@ pub fn run_agent_session(model: &str, user_task: &str, max_turns: u32) -> Result
 
         let mut results: Vec<(String, String)> = Vec::new();
         for tu in &parsed.tool_uses {
-            match execute_tool_gated(user_task, &tu.name, &tu.input) {
+            match execute_tool_gated(user_task_sanitized.as_str(), &tu.name, &tu.input) {
                 Ok(out) => {
                     log.push(format!("> tool {} ok ({} bytes)", tu.name, out.len()));
                     results.push((tu.id.clone(), out));
