@@ -30,6 +30,12 @@ export function assertRunIntent(input: unknown): asserts input is RunIntent {
   if (o.workspaceId !== undefined && typeof o.workspaceId !== 'string') {
     throw new TypeError('RunIntent.workspaceId must be a string when provided');
   }
+  if (o.structuredHints !== undefined) {
+    const h = o.structuredHints;
+    if (h === null || typeof h !== 'object' || Array.isArray(h)) {
+      throw new TypeError('RunIntent.structuredHints must be a plain object when provided');
+    }
+  }
 }
 
 /** Phase-1 placeholder classifier */

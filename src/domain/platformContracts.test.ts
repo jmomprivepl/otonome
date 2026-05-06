@@ -24,6 +24,32 @@ describe('platformContracts', () => {
         workspaceId: 1 as unknown as string,
       }),
     ).toThrow(/workspaceId/);
+    expect(() =>
+      assertRunIntent({
+        correlationId: 'c',
+        rawText: 'x',
+        structuredHints: null as unknown as Record<string, unknown>,
+      }),
+    ).toThrow(/structuredHints/);
+    expect(() =>
+      assertRunIntent({
+        correlationId: 'c',
+        rawText: 'x',
+        structuredHints: [] as unknown as Record<string, unknown>,
+      }),
+    ).toThrow(/structuredHints/);
+    expect(() =>
+      assertRunIntent({
+        correlationId: 'c',
+        rawText: 'x',
+        structuredHints: 'nope' as unknown as Record<string, unknown>,
+      }),
+    ).toThrow(/structuredHints/);
+    assertRunIntent({
+      correlationId: 'c',
+      rawText: 'x',
+      structuredHints: { key: 'value' },
+    });
   });
 
   it('defaults to adhoc routing when no SOP keywords match', () => {
