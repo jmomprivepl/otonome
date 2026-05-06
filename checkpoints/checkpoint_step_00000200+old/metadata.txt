@@ -1,0 +1,4 @@
+epoch=0
+lora_rank=16
+lora_alpha=32
+target_modules=15

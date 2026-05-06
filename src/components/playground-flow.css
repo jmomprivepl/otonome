@@ -1,0 +1,78 @@
+/* Playground React Flow — selection, hover, handles, edges */
+
+.playground-flow,
+.playground-flow * {
+  -webkit-app-region: no-drag;
+  overscroll-behavior: none;
+}
+
+/* WebView2 / Tauri: stabilize compositor layers during drag (prevents intermittent "disappearing" nodes). */
+.playground-flow .react-flow__viewport {
+  will-change: transform;
+  backface-visibility: hidden;
+  transform: translateZ(0);
+}
+
+.playground-flow .react-flow__node {
+  will-change: transform;
+  backface-visibility: hidden;
+  transform: translateZ(0);
+}
+
+.playground-flow .react-flow__node {
+  cursor: grab;
+}
+
+.playground-flow .react-flow__node:active {
+  cursor: grabbing;
+}
+
+.playground-flow .react-flow__node.selected .sop-dag-root {
+  border-color: rgb(139 92 246) !important;
+  box-shadow:
+    0 0 0 2px rgb(139 92 246),
+    0 8px 28px rgba(139, 92, 246, 0.28);
+}
+
+.playground-flow .react-flow__node:not(.selected):hover .sop-dag-root {
+  border-color: rgba(139, 92, 246, 0.65) !important;
+  box-shadow: 0 0 0 2px rgba(139, 92, 246, 0.45);
+}
+
+.playground-flow .react-flow__handle {
+  width: 14px !important;
+  height: 14px !important;
+  border: 2px solid rgb(255 255 255) !important;
+  box-shadow: 0 0 0 1px rgba(139, 92, 246, 0.6);
+  transition:
+    transform 0.12s ease,
+    filter 0.12s ease;
+}
+
+.playground-flow .react-flow__handle:hover {
+  transform: scale(1.2);
+  filter: brightness(1.15);
+  box-shadow: 0 0 0 2px rgba(139, 92, 246, 0.85);
+}
+
+.playground-flow .react-flow__edge-path {
+  stroke-width: 2.25px !important;
+}
+
+.playground-flow .react-flow__edge.selected .react-flow__edge-path,
+.playground-flow .react-flow__edge:focus .react-flow__edge-path,
+.playground-flow .react-flow__edge:focus-visible .react-flow__edge-path {
+  stroke: rgb(167 139 250) !important;
+  stroke-width: 3px !important;
+}
+
+.playground-flow .react-flow__connection-path {
+  stroke: rgb(196 181 253) !important;
+  stroke-width: 2.5px !important;
+}
+
+/* Built-in shift+drag selection band (matches marquee) */
+.playground-flow .react-flow__selection {
+  background: rgba(139, 92, 246, 0.12);
+  border: 2px solid rgba(139, 92, 246, 0.85);
+}

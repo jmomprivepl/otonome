@@ -1,0 +1,6 @@
+[[permission]]
+identifier = "allow-hermes"
+description = "Hermes agent session (cloud Anthropic loop with local router tool calls)."
+commands.allow = [
+  "hermes_run_agent_session",
+]

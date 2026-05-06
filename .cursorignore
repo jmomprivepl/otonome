@@ -1,0 +1,62 @@
+﻿# Cursor indexing / AI context — exclude bulky or generated paths (OOM prevention).
+# Syntax matches .gitignore. Adjust if you need full-repo search on a path below.
+
+# Dependencies
+**/node_modules/
+
+# JS / frontend build outputs
+dist/
+dist-ssr/
+build/
+out/
+.next/
+.nuxt/
+.turbo/
+.parcel-cache/
+*.tsbuildinfo
+
+# Rust
+**/target/
+
+# Python
+**/.venv/
+**/venv/
+**/__pycache__/
+*.py[cod]
+.venv-router/
+
+# C/C++ & CMake build trees (llama.cpp-style repos)
+**/cmake-build-*/
+**/CMakeFiles/
+**/compile_commands.json
+
+# Caches & package manager stores
+**/.cache/
+.npm/
+.pnpm-store/
+.yarn/
+
+# Large ML / model assets & checkpoints (this repo layout)
+checkpoints/
+bitnet-b1.58-2B-4T-gguf/
+ms-bitnet-bf16/
+ms-bitnet-raw/
+
+# Heavy binary model formats anywhere in tree
+*.gguf
+*.ggml
+*.bin
+*.safetensors
+*.onnx
+*.pt
+*.pth
+*.ckpt
+*.h5
+*.npz
+
+# Archives (often huge dataset dumps)
+*.zip
+*.7z
+*.tar
+*.gz
+*.xz

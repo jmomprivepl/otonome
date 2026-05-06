@@ -1,0 +1,14 @@
+# Router LoRA local training (CPU / system RAM).
+# Install with CPU wheels so pip does not pull a CUDA-only torch build:
+#   pip install -r Training/requirements.txt --extra-index-url https://download.pytorch.org/whl/cpu
+
+torch>=2.2.0
+transformers>=4.44.0
+accelerate>=0.33.0
+peft>=0.12.0
+trl>=0.12.0
+datasets>=2.16.0
+numpy>=1.24.0
+safetensors>=0.4.0
+sentencepiece>=0.2.0
+protobuf>=4.25.0

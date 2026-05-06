@@ -1,0 +1,7 @@
+[[permission]]
+identifier = "allow-nsdar"
+description = "NSDAR route preview and standalone local completion with llama-cli."
+commands.allow = [
+  "nsdar_route_preview",
+  "nsdar_local_complete",
+]

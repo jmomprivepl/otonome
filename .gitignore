@@ -16,6 +16,9 @@ dist-ssr
 # Python (training venv — do not commit)
 training/.venv/
 
+# qvac-fabric local venv (huge; exceeds GitHub file limits)
+qvac-fabric-llm.cpp/venv/
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json
@@ -29,3 +32,7 @@ training/.venv/
 
 # Superpowers brainstorm sessions (local mockups / state)
 .superpowers/
+
+# Large BitNet weights (GitHub LFS single-file limit 2GB; keep local only)
+ms-bitnet-bf16/model.safetensors
+ms-bitnet-raw/model.safetensors

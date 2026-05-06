@@ -1,0 +1,10 @@
+[[permission]]
+identifier = "allow-agent-orchestrator"
+description = "DAG orchestrator, SOP normalization, HITL resolution, and Anthropic-backed cloud nodes."
+commands.allow = [
+  "dag_publish_graph",
+  "dag_run_start",
+  "hitl_resolve_action",
+  "hitl_submit_clarification",
+  "sop_normalize",
+]

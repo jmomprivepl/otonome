@@ -1,0 +1,8 @@
+[[permission]]
+identifier = "allow-llama-cli"
+description = "Spawn llama-cli, stream stdin/stdout for local GGUF inference."
+commands.allow = [
+  "llama_cli_stop",
+  "llama_cli_start_session",
+  "llama_cli_send_line",
+]

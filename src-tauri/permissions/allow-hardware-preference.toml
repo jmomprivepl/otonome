@@ -1,0 +1,8 @@
+[[permission]]
+identifier = "allow-hardware-preference"
+description = "Read/write persisted CPU vs Vulkan GPU preference for in-process llama.cpp."
+commands.allow = [
+  "set_hardware_preference",
+  "get_hardware_preference",
+  "get_inference_hardware_snapshot",
+]
