@@ -7,6 +7,7 @@
     "dev": "vite",
     "build": "vite build",
     "lint": "eslint .",
+    "test": "vitest run",
     "preview": "vite preview",
     "tauri": "tauri",
     "tauri:dev": "node scripts/tauri-dev-prep.mjs && kill-port 5173 && tauri dev --features llama_cpp",
@@ -64,6 +65,7 @@
     "tailwindcss": "^4.0.14",
     "typescript": "^5.5.3",
     "typescript-eslint": "^8.3.0",
-    "vite": "^6.1.1"
+    "vite": "^6.1.1",
+    "vitest": "^3.1.1"
   }
 }
