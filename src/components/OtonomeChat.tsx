@@ -7,7 +7,7 @@ import { createTauriHermesCloudInferenceEngine } from '@/hermes/inferenceEngines
 import { formatHermesTrace } from '@/hermes/formatHermesTrace';
 import { MockInferenceEngine } from '@/hermes/mockInferenceEngine';
 import { useHermesOrchestration } from '@/hermes/useHermesOrchestration';
-import type { InferenceEngine } from '@/types/hermesOrchestration';
+import type { InferenceEngine, PlatformRouteSnapshot } from '@/types/hermesOrchestration';
 import { formatInferenceHardwareLine, type InferenceHardwareSnapshot } from '@/types/nsdar';
 
 type ChatMsg = {
@@ -20,6 +20,7 @@ type ChatMsg = {
     model: string;
     maxTurns: number;
     routeJson?: string;
+    platformRoute?: PlatformRouteSnapshot;
   };
 };
 
@@ -127,6 +128,7 @@ export function OtonomeChat() {
           model: model.trim() || (isTauriRuntime() ? '(backend default)' : 'mock-engine'),
           maxTurns,
           routeJson: JSON.stringify(result.route),
+          platformRoute: result.platformRoute,
         },
       },
     ]);
@@ -150,10 +152,11 @@ export function OtonomeChat() {
       <div className="flex-1 overflow-y-auto p-4 space-y-3 text-sm">
         {messages.length === 0 ? (
           <p className="text-slate-500 dark:text-slate-400 text-sm">
-            Hermes routes your request (SOP, specialist, or direct), then runs the cloud agent loop per inference slice.
-            Try prompts containing <strong className="text-violet-500">contract</strong>, <strong className="text-violet-500">finance</strong>, or{' '}
-            <strong className="text-violet-500">incident</strong> to see inline progress. Outside Tauri, a mock engine drives the checklist.
-            Expand <strong className="text-violet-500">Audit trail</strong> for orchestration logs.
+            <strong className="text-violet-500">Platform routing</strong> runs first (<code className="text-[11px]">decideRoute</code>):{' '}
+            say <strong className="text-violet-500">use sop</strong> or <strong className="text-violet-500">standard procedure</strong> plus domain words (
+            <strong className="text-violet-500">contract</strong>, <strong className="text-violet-500">incident</strong>) to unlock SOP registry + DAG checklist;
+            omit those phrases for <strong className="text-emerald-500">ad-hoc</strong> direct Hermes (registry skipped).
+            Expand <strong className="text-violet-500">Audit trail</strong> for <code className="text-[11px]">platform_decideRoute</code> lines.
           </p>
         ) : (
           messages.map((m) => (
@@ -174,6 +177,12 @@ export function OtonomeChat() {
                 <div className="mt-2">
                   <div className="text-[11px] text-slate-300/80 font-mono">
                     inferenceCalls={m.audit.turnsUsed} · model={m.audit.model} · maxTurns={m.audit.maxTurns}
+                    {m.audit.platformRoute ? (
+                      <span className="block mt-0.5 text-amber-200/90 break-all">
+                        platform={m.audit.platformRoute.mode} · conf={m.audit.platformRoute.confidence.toFixed(2)} ·{' '}
+                        {m.audit.platformRoute.rationaleTrace.join(' → ')}
+                      </span>
+                    ) : null}
                     {m.audit.routeJson ? (
                       <span className="block mt-0.5 text-slate-400/90 break-all">route={m.audit.routeJson}</span>
                     ) : null}

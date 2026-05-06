@@ -125,10 +125,20 @@ export type HermesTraceEvent =
   | { type: 'log'; message: string }
   | { type: 'route'; decision: RouteDecision };
 
+/** Output of `platformContracts.decideRoute` (Phase 1 classifier), surfaced in UI for SOP vs ad-hoc demos. */
+export interface PlatformRouteSnapshot {
+  mode: 'sop' | 'adhoc';
+  confidence: number;
+  rationaleTrace: string[];
+  sopBundleId?: string;
+  sopVersion?: string;
+}
+
 export interface HermesOrchestrationResult {
   finalText: string;
   trace: HermesTraceEvent[];
   route: RouteDecision;
   /** Number of `InferenceEngine.executeInference` invocations (SOP = one per step). */
   inferenceCallCount: number;
+  platformRoute: PlatformRouteSnapshot;
 }

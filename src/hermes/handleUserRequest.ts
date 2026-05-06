@@ -6,6 +6,7 @@ import type {
   RouteDecision,
   TaskContext,
 } from '@/types/hermesOrchestration';
+import { decideRoute as platformClassifyRoute } from '@/domain/platformContracts';
 import { isTauriRuntime, getNativeLlmPaths } from '@/config/nativeLlm';
 import { SOP_REGISTRY } from '@/hermes/registries';
 import type { PersistedWorkflowSop } from '@/hermes/workflowDag';
@@ -114,6 +115,11 @@ export async function handleUserRequest(
     onTraceLog?.(formatHermesTraceLine(e));
   };
   const user = task.userPrompt.trim();
+  const correlationId =
+    typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
+      ? crypto.randomUUID()
+      : `cid-${Date.now()}`;
+  const platformRoute = platformClassifyRoute({ correlationId, rawText: user });
   const finetunePersona =
     typeof task.finetunePersonaSystem === 'string' && task.finetunePersonaSystem.trim().length > 0
       ? task.finetunePersonaSystem.trim()
@@ -129,15 +135,42 @@ export async function handleUserRequest(
   };
 
   emit({ phase: 'understanding_intent', headline: headlineForPhase('understanding_intent', { kind: 'direct' }) });
-  pushTrace({ type: 'log', message: '> tool_call: check_sop_registry' });
-  await new Promise((r) => window.setTimeout(r, 30));
-  const sopCheck = checkSopRegistry(user);
   pushTrace({
     type: 'log',
-    message: sopCheck.found ? `> tool_result: found sopId=${sopCheck.sopId}` : `> tool_result: ${sopCheck.message}`,
+    message: `> platform_decideRoute: ${JSON.stringify({
+      mode: platformRoute.mode,
+      confidence: platformRoute.confidence,
+      rationaleTrace: platformRoute.rationaleTrace,
+      sopBundleId: platformRoute.sopBundleId ?? null,
+    })}`,
   });
 
-  const decision: RouteDecision = sopCheck.found ? { kind: 'sop', sopId: sopCheck.sopId } : { kind: 'direct' };
+  let decision: RouteDecision;
+  if (platformRoute.mode === 'adhoc') {
+    pushTrace({
+      type: 'log',
+      message: '> platform_gate: ad-hoc — skipping SOP registry; Hermes runs direct inference',
+    });
+    decision = { kind: 'direct' };
+  } else {
+    pushTrace({ type: 'log', message: '> tool_call: check_sop_registry (platform flagged SOP mode)' });
+    await new Promise((r) => window.setTimeout(r, 30));
+    const sopCheck = checkSopRegistry(user);
+    pushTrace({
+      type: 'log',
+      message: sopCheck.found
+        ? `> tool_result: found sopId=${sopCheck.sopId}`
+        : `> tool_result: ${sopCheck.message}`,
+    });
+    decision = sopCheck.found ? { kind: 'sop', sopId: sopCheck.sopId } : { kind: 'direct' };
+    if (platformRoute.mode === 'sop' && decision.kind !== 'sop') {
+      pushTrace({
+        type: 'log',
+        message:
+          '> note: platform SOP mode but no registry SOP matched — falling back to direct inference (add keywords like contract / incident)',
+      });
+    }
+  }
   pushTrace({ type: 'route', decision });
   pushTrace({ type: 'log', message: `> route: ${JSON.stringify(decision)}` });
 
@@ -212,7 +245,19 @@ export async function handleUserRequest(
           headline: 'Awaiting input…',
           sopSteps: null,
         });
-        return { finalText, trace, route: decision, inferenceCallCount };
+        return {
+          finalText,
+          trace,
+          route: decision,
+          inferenceCallCount,
+          platformRoute: {
+            mode: platformRoute.mode,
+            confidence: platformRoute.confidence,
+            rationaleTrace: platformRoute.rationaleTrace,
+            sopBundleId: platformRoute.sopBundleId,
+            sopVersion: platformRoute.sopVersion,
+          },
+        };
       }
 
       let accumulated = `User goal:\n${user}\n\n`;
@@ -253,7 +298,19 @@ export async function handleUserRequest(
 
       const finalText = `SOP complete: ${def.title}\n\n${accumulated.trim()}`;
       emit({ phase: 'idle', headline: 'Awaiting input…', sopSteps: null });
-      return { finalText, trace, route: decision, inferenceCallCount };
+      return {
+        finalText,
+        trace,
+        route: decision,
+        inferenceCallCount,
+        platformRoute: {
+          mode: platformRoute.mode,
+          confidence: platformRoute.confidence,
+          rationaleTrace: platformRoute.rationaleTrace,
+          sopBundleId: platformRoute.sopBundleId,
+          sopVersion: platformRoute.sopVersion,
+        },
+      };
     }
 
     emit({ phase: 'direct_inference', headline: headlineForPhase('direct_inference', decision), sopSteps: null });
@@ -266,7 +323,19 @@ export async function handleUserRequest(
     inferenceCallCount += 1;
     res.telemetry?.forEach((m) => pushTrace({ type: 'log', message: m }));
     emit({ phase: 'idle', headline: 'Awaiting input…', sopSteps: null });
-    return { finalText: res.text, trace, route: decision, inferenceCallCount };
+    return {
+      finalText: res.text,
+      trace,
+      route: decision,
+      inferenceCallCount,
+      platformRoute: {
+        mode: platformRoute.mode,
+        confidence: platformRoute.confidence,
+        rationaleTrace: platformRoute.rationaleTrace,
+        sopBundleId: platformRoute.sopBundleId,
+        sopVersion: platformRoute.sopVersion,
+      },
+    };
   } catch (e) {
     const msg = String(e);
     pushTrace({ type: 'log', message: `> error: ${msg}` });
@@ -276,6 +345,18 @@ export async function handleUserRequest(
       sopSteps: null,
     });
     emit({ phase: 'idle', headline: 'Awaiting input…', sopSteps: null });
-    return { finalText: `Error: ${msg}`, trace, route: decision, inferenceCallCount };
+    return {
+      finalText: `Error: ${msg}`,
+      trace,
+      route: decision,
+      inferenceCallCount,
+      platformRoute: {
+        mode: platformRoute.mode,
+        confidence: platformRoute.confidence,
+        rationaleTrace: platformRoute.rationaleTrace,
+        sopBundleId: platformRoute.sopBundleId,
+        sopVersion: platformRoute.sopVersion,
+      },
+    };
   }
 }

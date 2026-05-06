@@ -78,6 +78,11 @@ export function useHermesOrchestration(
           trace: [{ type: 'log', message: `> error: ${err}` }],
           route: { kind: 'direct' },
           inferenceCallCount: 0,
+          platformRoute: {
+            mode: 'adhoc',
+            confidence: 0,
+            rationaleTrace: ['unreachable: orchestration wrapper error before classification'],
+          },
         };
         dispatch({ type: 'DONE', result: fallback });
         return fallback;
