@@ -198,6 +198,16 @@ impl AgentRuntimeState {
             g.workflow.node_outputs.clear();
             g.workflow.human_inputs.clear();
         }
+        let _ = crate::run_store::append_run_started(crate::run_store::RunStartedEvent {
+            ts_ms: std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map(|d| d.as_millis() as i64)
+                .unwrap_or(0),
+            run_id: rid.as_str(),
+            sop_id: opts.sop_id.as_deref(),
+            task_id: opts.task_id.as_deref(),
+            user_request_len: opts.user_request.clone().unwrap_or_default().len(),
+        });
 
         let rt = self.clone();
         let anthropic_model = opts
