@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useDelegationMinimizedChrome } from '@/delegation/useDelegationMinimizedChrome';
 import { DelegationMinimizedStrip } from '@/components/delegation/DelegationMinimizedStrip';
 import { DelegationExpandedDrawer } from '@/components/delegation/DelegationExpandedDrawer';
+import { computeDelegationStripCounts } from '@/lib/delegationMonitoringCounts';
 import { useKanbanStore } from '@/store';
 
 type DelegationShellChromeProps = {
@@ -24,17 +25,20 @@ export function DelegationShellChrome({ enabled, sidebarCollapsed }: DelegationS
   const dag = useKanbanStore((s) => s.activeDagRun);
 
   const { approvalCount, runningSopCount, activeJobCount } = useMemo(() => {
-    let approvals = 0;
-    if (pendingAction != null) approvals += 1;
-    if (pendingClarification != null) approvals += 1;
-    if (pendingHuman != null) approvals += 1;
-    const sopRunning = Boolean(hermes?.busy && hermes.phase === 'sop_running');
-    const runningSops = sopRunning ? 1 : 0;
-    const hermesBusyOther = Boolean(
-      hermes?.busy && hermes.phase !== 'idle' && hermes.phase !== 'sop_running',
-    );
-    const jobs = (dag ? 1 : 0) + (hermesBusyOther ? 1 : 0);
-    return { approvalCount: approvals, runningSopCount: runningSops, activeJobCount: jobs };
+    let pendingApprovalsCount = 0;
+    if (pendingAction != null) pendingApprovalsCount += 1;
+    if (pendingClarification != null) pendingApprovalsCount += 1;
+    if (pendingHuman != null) pendingApprovalsCount += 1;
+    const { approvals, runningSops, activeJobs } = computeDelegationStripCounts({
+      pendingApprovalsCount,
+      hermesActivity: hermes,
+      dag,
+    });
+    return {
+      approvalCount: approvals,
+      runningSopCount: runningSops,
+      activeJobCount: activeJobs,
+    };
   }, [pendingAction, pendingClarification, pendingHuman, hermes, dag]);
 
   useEffect(() => {
