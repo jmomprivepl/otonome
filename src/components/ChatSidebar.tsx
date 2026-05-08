@@ -8,6 +8,7 @@ import { getAgentProfile } from '../config/agentProfiles';
 import { ManagerProfile } from '@/config/managerProfiles';
 import { useKanbanStore } from '@/store';
 import { isTauriRuntime } from '@/config/nativeLlm';
+import { parseAssistantActions } from '@/lib/assistantActionParser';
 
 interface Message {
   role: 'user' | 'assistant' | 'system';
@@ -643,116 +644,31 @@ export function ChatSidebar({ isOpen, onClose, officeManager, input, setInput }:
     }
   };
 
-  const extractAndProcessActions = (content: string): { cleanContent: string, hasAction: boolean } => {
-    // Default return value if content is undefined or null
-    if (!content) {
-      return { cleanContent: '', hasAction: false };
+  const extractAndProcessActions = (content: string): { cleanContent: string; hasAction: boolean } => {
+    const parsed = parseAssistantActions(content);
+    if (parsed.actions.length === 0) {
+      return { cleanContent: parsed.cleanText, hasAction: false };
     }
-    
-    let cleanContent = content;
-    let hasAction = false;
-    
-    try {
-      // Try to parse the entire content as JSON first
-      const contentObj = JSON.parse(content);
-      
-      if (contentObj.action === 'create_task' && contentObj.task) {
-        hasAction = true;
-        let taskData;
-        
-        // Handle both string and object task values
-        if (typeof contentObj.task === 'string') {
-          try {
-            taskData = JSON.parse(contentObj.task);
-          } catch {
-            // If parsing fails, assume it's a simple string task
-            taskData = {
-              title: contentObj.task,
-              description: '',
-              project: activeProject?.name ?? projects[0]?.name ?? '',
-              status: 'draft',
-            };
-          }
-        } else {
-          taskData = contentObj.task;
-        }
 
-        const title = typeof taskData?.title === 'string' ? taskData.title.trim() : String(taskData?.title ?? '').trim();
-        const description =
-          typeof taskData?.description === 'string' ? taskData.description : String(taskData?.description ?? '');
-        const project = normalizeProjectName(taskData?.project);
-        const status = normalizeTaskStatus(taskData?.status);
-
-        createTask(title || 'Untitled task', description, project, status);
-        goToScreen('/tasks'); // Navigate to tasks screen after creating a task
-        cleanContent = '<task created>';
-      } else if (contentObj.action === 'goto' && contentObj.screen_name) {
-        hasAction = true;
-        goToScreen(contentObj.screen_name);
-        cleanContent = '<screen changed>';
+    for (const action of parsed.actions) {
+      if (action.kind === 'goto') {
+        goToScreen(action.screenName);
+      } else if (action.kind === 'create_task') {
+        const project = normalizeProjectName(action.task.project);
+        const status = normalizeTaskStatus(action.task.status);
+        createTask(action.task.title || 'Untitled task', action.task.description ?? '', project, status);
+        goToScreen('/tasks');
       }
-    } catch (e) {
-      // Accept XML-ish action tags for robustness (some models emit these)
-      // Examples:
-      //   <action>goto</action><screen_name>agents</screen_name>
-      //   <action>goto</action> agents
-      const actionTagMatch = content.match(/<action>\s*(goto|create_task)\s*<\/action>/i);
-      if (actionTagMatch) {
-        const action = actionTagMatch[1].toLowerCase();
-        if (action === 'goto') {
-          // Prefer an explicit screen_name tag if present
-          const sn = content.match(/<screen_name>\s*([^<]+?)\s*<\/screen_name>/i)?.[1]?.trim();
-          const candidates = ['tasks', 'agents', 'data', 'settings', 'agent-sop', 'playground'];
-          const inferred =
-            sn ||
-            candidates.find((c) => new RegExp(`\\b${c.replace('-', '\\-')}\\b`, 'i').test(content)) ||
-            null;
-          if (inferred) {
-            hasAction = true;
-            goToScreen(inferred);
-            cleanContent = '<screen changed>';
-            return { cleanContent, hasAction };
-          }
-        }
-      }
-
-      // If JSON.parse fails, try the old regex approach for backward compatibility
-      const actionRegex = /\{"action":\s*"(goto|create_task)",\s*"(screen_name|task)":\s*"([^"]+)"\}/g;
-      const matches = [...content.matchAll(actionRegex)];
-      
-      if (matches.length > 0) {
-        hasAction = true;
-        
-        // Process each action found
-        matches.forEach(match => {
-          const fullMatch = match[0];
-          const action = match[1];
-          const type = match[2];
-          const value = match[3];
-          
-          // Execute the action
-          if (action === 'goto') {
-            goToScreen(value);
-          } else if (action === 'create_task') {
-            try {
-              const taskData = JSON.parse(value);
-              createTask(taskData.title, taskData.description, taskData.project, taskData.status);
-              goToScreen('/tasks'); // Navigate to tasks screen after creating a task
-            } catch (e) {
-              console.error('Failed to parse task data:', e);
-            }
-          }
-          
-          // Remove the action from the content
-          cleanContent = cleanContent.replace(fullMatch, '<action processed>');
-        });
-      }
-      
-      // Clean up any extra whitespace
-      cleanContent = cleanContent.trim();
     }
-    
-    return { cleanContent, hasAction };
+
+    const cleanContent =
+      parsed.actions.some((a) => a.kind === 'create_task')
+        ? '<task created>'
+        : parsed.actions.some((a) => a.kind === 'goto')
+          ? '<screen changed>'
+          : parsed.cleanText;
+
+    return { cleanContent, hasAction: true };
   };
   
   const goToScreen = (screenName: string) => {

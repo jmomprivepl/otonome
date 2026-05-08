@@ -11,6 +11,7 @@ import type { PythonResult } from '@/python/types';
 
 import { exaSearch, exaAnswer } from '@/exaops';
 import { listBases, listTables, listRecords } from '@/airtableops';
+import { parseAssistantActions } from '@/lib/assistantActionParser';
 
 interface Message {
   role: 'user' | 'assistant' | 'system';
@@ -124,45 +125,17 @@ export const TaskCard = React.memo(({
     return null;
   };
 
-  const extractActions = (content: string): { cleanContent: string, actions: string[][] } => {
-    // Default return value if content is undefined or null
-    if (!content) {
-      return { cleanContent: '', actions: [] };
+  const extractActions = (content: string): { cleanContent: string; actions: string[][] } => {
+    const parsed = parseAssistantActions(content);
+    const actions: string[][] = [];
+
+    for (const a of parsed.actions) {
+      if (a.kind === 'search') actions.push(['search', a.request]);
+      else if (a.kind === 'getanswer') actions.push(['getanswer', a.request]);
+      else if (a.kind === 'list_records') actions.push(['list_records', a.request]);
     }
-    
-    let cleanContent = content;
-    let actions: string[][] = [];
-    
-    // Look for JSON action pattern
-    const actionRegex = /\{"action":\s*"(search|getanswer|list_records)",\s*"(request|table_id)":\s*"([^"]+)"\}/g;
-    const matches = [...content.matchAll(actionRegex)];
-    
-    if (matches.length > 0) {
-      
-      // Process each action found
-      matches.forEach(match => {
-        const fullMatch = match[0];
-        const action = match[1];
-        const request = match[3];
-        
-        // Execute the action
-        if (action === "search" && request) {
-          actions.push(["search", request]);
-        } else if (action === "getanswer" && request) {
-          actions.push(["getanswer", request]);
-        } else if (action === "list_records" && request) {
-          actions.push(["list_records", request]);
-        }
-        
-        // Remove the action from the content
-        cleanContent = cleanContent.replace(fullMatch, '');
-      });
-      
-      // Clean up any extra whitespace
-      cleanContent = cleanContent.trim();
-    }
-    
-    return { cleanContent, actions };
+
+    return { cleanContent: parsed.cleanText, actions };
   };
 
   useEffect(() => {
