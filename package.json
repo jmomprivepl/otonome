@@ -8,6 +8,7 @@
     "build": "vite build",
     "lint": "eslint .",
     "test": "vitest run",
+    "test:delegation-smoke": "vitest run src/lib/delegationShellRules.test.ts src/lib/delegationMonitoringCounts.test.ts src/domain/hitlTimeSensitivity.test.ts src/lib/assistantActionParser.test.ts src/hermes/wrapInferenceEngineRetry.test.ts src/domain/hitlPayloadDedupe.test.ts",
     "preview": "vite preview",
     "tauri": "tauri",
     "tauri:dev": "node scripts/tauri-dev-prep.mjs && kill-port 5173 && tauri dev --features llama_cpp",

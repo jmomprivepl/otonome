@@ -468,10 +468,10 @@ An earlier spike used **`delegationShellForceExpanded`** in the store coupled to
 #### Automated smoke (run locally before manual QA)
 
 ```bash
-npm test -- src/lib/delegationShellRules.test.ts src/lib/delegationMonitoringCounts.test.ts src/domain/hitlTimeSensitivity.test.ts src/lib/assistantActionParser.test.ts src/hermes/wrapInferenceEngineRetry.test.ts src/domain/hitlPayloadDedupe.test.ts
+npm run test:delegation-smoke
 ```
 
-Optional full unit run: `npm test`
+Same file list as `test:delegation-smoke` in `package.json`. Optional full unit run: `npm test`
 
 ---
 
@@ -510,13 +510,15 @@ git commit -m "docs(delegation): QA checklist and spec/plan cross-links"
 
 ## Execution note
 
-Prior **subagent-driven** execution proceeded on branch **`feat/delegation-hub-shell`**. **Task 8** (**`AuthenticatedWorkspaceFrame`**) and **Task 10** (this checklist + **spec §13** cross-links) are reflected in HEAD; rerun **manual** Task 10 checkboxes before each release candidate.
+Prior **subagent-driven** execution proceeded on branch **`feat/delegation-hub-shell`**. **Task 8** (**`AuthenticatedWorkspaceFrame`**) and **Task 10** (this checklist + **spec §13** cross-links) are reflected in HEAD; rerun **manual** Task 10 checkboxes before each release candidate. For automated coverage, run **`npm run test:delegation-smoke`** (see Task 10 above).
 
 ---
 
 ## Phase 2 — Brain Upgrade (tool reliability, offline-first)
 
-Tracked on branch **`feat/brain-upgrade-tool-actions`** (stack PRs or merge to `main` when ready).
+**Status:** Merged to **`main`** (PR #2 + follow-ups). Use **`npm run test:delegation-smoke`** before releases (delegation shell + HITL sensitivity + action parser + inference retry + HITL dedupe tests).
+
+**WebView / React Flow:** Tauri **`webview_debug_log`**, blank-canvas watchdog, and viewport heal for Playground + SOP graph landed on **`main`** separately (`feat/tauri-reactflow-webview-diagnostics`).
 
 | Piece | Role |
 | --- | --- |
