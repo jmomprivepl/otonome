@@ -487,7 +487,7 @@ Optional full unit run: `npm test`
 - [ ] **8. Time-sensitive HITL** — Event with **`timeSensitive: true`** → **elevated modal** (stronger backdrop, above drawer **z-index**); item also **Time-sensitive** in monitoring column when queued.  
 - [ ] **9. Keyboard / a11y spot-check** — From minimized shell: **Expand** reachable without mouse-only traps; modal **focus containment** on open/close.  
 - [ ] **10. Hermes inference retries** — After a transient failure (or simulated IPC flake), Hermes trace / audit log may include **`> inference_retry:`** lines and the request still completes when the backend succeeds on a later attempt (`wrapInferenceEngineWithRetry`).  
-- [ ] **11. HITL dedupe** — If the backend emits the **same** pending HITL payload twice, the UI should **not** flicker; **SOP / Playground log** may show **`> HITL dedupe:`** once (`hitlPayloadDedupe` + `AgentHitlBridge`).
+- [ ] **11. HITL dedupe** — If the backend emits the **same** pending HITL payload twice, the UI should **not** flicker; **SOP / Playground log** may show **`> HITL dedupe:`** once (`hitlPayloadDedupe` + `AgentHitlBridge`). With a pathological double-emit at the host, the **Tauri process stderr** may show **`[hitl-dedupe] skip duplicate Rust emit`** (`hitl.rs`).
 
 ---
 
@@ -525,3 +525,4 @@ Tracked on branch **`feat/brain-upgrade-tool-actions`** (stack PRs or merge to `
 | `OtonomeChat` + `NsdarCommandCenter` | Wrap real Tauri inference engines with **`wrapInferenceEngineWithRetry`**. |
 | `src/domain/hitlPayloadDedupe.ts` | Stable deep-compare for HITL payloads; skip identical re-emits. |
 | `AgentHitlBridge` | Uses dedupe before updating **`pendingActionApproval` / `pendingClarification` / `pendingHumanReview`** (logs **`> HITL dedupe:`**). |
+| `src-tauri/src/hitl.rs` | Rust **`try_emit_hitl_event`**: skips **`app.emit`** when serialized payload matches previous for that channel; **`eprintln!("[hitl-dedupe] …")`**; fingerprints cleared on **resolve / submit** and on **recv** cancellation. |
