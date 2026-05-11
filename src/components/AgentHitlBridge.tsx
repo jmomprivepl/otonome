@@ -7,6 +7,7 @@ import { ClarificationModal } from '@/components/ClarificationModal';
 import { HumanReviewModal } from '@/components/HumanReviewModal';
 import type { ActionPendingPayload, ClarificationPayload, HumanReviewPayload } from '@/types/agentDag';
 import type { WorkflowPublicSnapshot } from '@/hermes/tauriWorkflowRun';
+import { isIdenticalHitlPayload } from '@/domain/hitlPayloadDedupe';
 import { logTimeSensitivityResolution, withResolvedTimeSensitivity } from '@/domain/hitlTimeSensitivity';
 
 export function AgentHitlBridge() {
@@ -25,11 +26,21 @@ export function AgentHitlBridge() {
     const setup = (async () => {
       const u1 = await listen<ActionPendingPayload>('action_pending_approval', (e) => {
         const enriched = withResolvedTimeSensitivity(e.payload);
+        const prev = useKanbanStore.getState().pendingActionApproval;
+        if (isIdenticalHitlPayload(prev, enriched)) {
+          appendAgentDagLog(`> HITL dedupe: action_pending_approval id=${enriched.id}`);
+          return;
+        }
         logTimeSensitivityResolution('action', enriched.id, enriched.timeSensitivityRule ?? 'none', enriched.timeSensitive);
         setPendingActionApproval(enriched);
       });
       const u2 = await listen<ClarificationPayload>('clarification_needed', (e) => {
         const enriched = withResolvedTimeSensitivity(e.payload);
+        const prev = useKanbanStore.getState().pendingClarification;
+        if (isIdenticalHitlPayload(prev, enriched)) {
+          appendAgentDagLog(`> HITL dedupe: clarification_needed id=${enriched.id}`);
+          return;
+        }
         logTimeSensitivityResolution(
           'clarification',
           enriched.id,
@@ -40,6 +51,11 @@ export function AgentHitlBridge() {
       });
       const u3 = await listen<HumanReviewPayload>('workflow_human_needed', (e) => {
         const enriched = withResolvedTimeSensitivity(e.payload);
+        const prev = useKanbanStore.getState().pendingHumanReview;
+        if (isIdenticalHitlPayload(prev, enriched)) {
+          appendAgentDagLog(`> HITL dedupe: workflow_human_needed id=${enriched.id}`);
+          return;
+        }
         logTimeSensitivityResolution(
           'human_review',
           enriched.id,

@@ -468,7 +468,7 @@ An earlier spike used **`delegationShellForceExpanded`** in the store coupled to
 #### Automated smoke (run locally before manual QA)
 
 ```bash
-npm test -- src/lib/delegationShellRules.test.ts src/lib/delegationMonitoringCounts.test.ts src/domain/hitlTimeSensitivity.test.ts
+npm test -- src/lib/delegationShellRules.test.ts src/lib/delegationMonitoringCounts.test.ts src/domain/hitlTimeSensitivity.test.ts src/lib/assistantActionParser.test.ts src/hermes/wrapInferenceEngineRetry.test.ts src/domain/hitlPayloadDedupe.test.ts
 ```
 
 Optional full unit run: `npm test`
@@ -485,7 +485,9 @@ Optional full unit run: `npm test`
 - [ ] **6. Other focus-class routes** — e.g. **`/playground`**, narrow → strip behavior consistent with `delegationShellRules`.  
 - [ ] **7. Non–focus-class sanity** — e.g. **`/agent-sop`** (list), **`/settings`**, wide layout: **no spurious strip**; **`AuthenticatedWorkspaceFrame`** pages show **consistent header offset** (no double top padding vs hub).  
 - [ ] **8. Time-sensitive HITL** — Event with **`timeSensitive: true`** → **elevated modal** (stronger backdrop, above drawer **z-index**); item also **Time-sensitive** in monitoring column when queued.  
-- [ ] **9. Keyboard / a11y spot-check** — From minimized shell: **Expand** reachable without mouse-only traps; modal **focus containment** on open/close.
+- [ ] **9. Keyboard / a11y spot-check** — From minimized shell: **Expand** reachable without mouse-only traps; modal **focus containment** on open/close.  
+- [ ] **10. Hermes inference retries** — After a transient failure (or simulated IPC flake), Hermes trace / audit log may include **`> inference_retry:`** lines and the request still completes when the backend succeeds on a later attempt (`wrapInferenceEngineWithRetry`).  
+- [ ] **11. HITL dedupe** — If the backend emits the **same** pending HITL payload twice, the UI should **not** flicker; **SOP / Playground log** may show **`> HITL dedupe:`** once (`hitlPayloadDedupe` + `AgentHitlBridge`).
 
 ---
 
@@ -521,3 +523,5 @@ Tracked on branch **`feat/brain-upgrade-tool-actions`** (stack PRs or merge to `
 | `src/lib/assistantActionParser.ts` | Unified parsing of assistant JSON/XML tool actions (ChatSidebar, ChatNode, TaskCard). |
 | `src/hermes/wrapInferenceEngineRetry.ts` | Retries `InferenceEngine.executeInference` on likely-transient IPC/network errors; merges `> inference_retry:` lines into Hermes telemetry. |
 | `OtonomeChat` + `NsdarCommandCenter` | Wrap real Tauri inference engines with **`wrapInferenceEngineWithRetry`**. |
+| `src/domain/hitlPayloadDedupe.ts` | Stable deep-compare for HITL payloads; skip identical re-emits. |
+| `AgentHitlBridge` | Uses dedupe before updating **`pendingActionApproval` / `pendingClarification` / `pendingHumanReview`** (logs **`> HITL dedupe:`**). |
