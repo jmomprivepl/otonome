@@ -509,3 +509,15 @@ git commit -m "docs(delegation): QA checklist and spec/plan cross-links"
 ## Execution note
 
 Prior **subagent-driven** execution proceeded on branch **`feat/delegation-hub-shell`**. **Task 8** (**`AuthenticatedWorkspaceFrame`**) and **Task 10** (this checklist + **spec §13** cross-links) are reflected in HEAD; rerun **manual** Task 10 checkboxes before each release candidate.
+
+---
+
+## Phase 2 — Brain Upgrade (tool reliability, offline-first)
+
+Tracked on branch **`feat/brain-upgrade-tool-actions`** (stack PRs or merge to `main` when ready).
+
+| Piece | Role |
+| --- | --- |
+| `src/lib/assistantActionParser.ts` | Unified parsing of assistant JSON/XML tool actions (ChatSidebar, ChatNode, TaskCard). |
+| `src/hermes/wrapInferenceEngineRetry.ts` | Retries `InferenceEngine.executeInference` on likely-transient IPC/network errors; merges `> inference_retry:` lines into Hermes telemetry. |
+| `OtonomeChat` + `NsdarCommandCenter` | Wrap real Tauri inference engines with **`wrapInferenceEngineWithRetry`**. |
