@@ -9,6 +9,10 @@ export { buildLinearWorkflowFromRegistry, resolveWorkflowGraphForSopId } from '@
 export type { PersistedWorkflowSop } from '@/hermes/workflowDag';
 export { runTauriWorkflowAndWait, toRustDagGraph } from '@/hermes/tauriWorkflowRun';
 export { createTauriHermesCloudInferenceEngine, createTauriNsdarInferenceEngine } from '@/hermes/inferenceEngines';
+export {
+  isProbablyTransientInvokeFailure,
+  wrapInferenceEngineWithRetry,
+} from '@/hermes/wrapInferenceEngineRetry';
 export { MockInferenceEngine } from '@/hermes/mockInferenceEngine';
 export { AGENT_REGISTRY, getSubAgent, routeIntent, SOP_REGISTRY } from '@/hermes/registries';
 export { useHermesOrchestration } from '@/hermes/useHermesOrchestration';

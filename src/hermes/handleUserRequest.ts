@@ -169,7 +169,6 @@ export async function handleUserRequest(
     decision = { kind: 'direct' };
   } else {
     pushTrace({ type: 'log', message: '> tool_call: check_sop_registry (platform flagged SOP mode)' });
-    await new Promise((r) => window.setTimeout(r, 30));
     const sopCheck = checkSopRegistry(user);
     pushTrace({
       type: 'log',

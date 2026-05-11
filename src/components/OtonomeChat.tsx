@@ -4,6 +4,7 @@ import { Send, Sparkles, Terminal } from 'lucide-react';
 import { isTauriRuntime } from '@/config/nativeLlm';
 import { HermesProgressPanel } from '@/components/hermes/HermesProgressPanel';
 import { createTauriHermesCloudInferenceEngine } from '@/hermes/inferenceEngines';
+import { wrapInferenceEngineWithRetry } from '@/hermes/wrapInferenceEngineRetry';
 import { formatHermesTrace } from '@/hermes/formatHermesTrace';
 import { MockInferenceEngine } from '@/hermes/mockInferenceEngine';
 import { useHermesOrchestration } from '@/hermes/useHermesOrchestration';
@@ -59,13 +60,13 @@ export function OtonomeChat() {
     if (!isTauriRuntime()) {
       return new MockInferenceEngine(140);
     }
-    return {
+    return wrapInferenceEngineWithRetry({
       executeInference: async (req) => {
         const { invoke } = await import('@tauri-apps/api/core');
         const inner = createTauriHermesCloudInferenceEngine({ invoke, model, maxTurns });
         return inner.executeInference(req);
       },
-    };
+    });
   }, [model, maxTurns]);
 
   const getPersistedWorkflowSops = useCallback(() => useKanbanStore.getState().agentSops, []);

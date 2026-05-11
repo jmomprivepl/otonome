@@ -10,6 +10,39 @@ pub struct HitlCoordinator {
     approval_tx: Mutex<HashMap<String, mpsc::Sender<bool>>>,
     clarify_tx: Mutex<HashMap<String, mpsc::Sender<String>>>,
     human_review_tx: Mutex<HashMap<String, mpsc::Sender<HumanReviewResponse>>>,
+    /// Last serialized payload per channel — skip `emit` if identical to previous (defensive; cleared on resolve).
+    last_approval_emit_json: Mutex<Option<String>>,
+    last_clarify_emit_json: Mutex<Option<String>>,
+    last_human_emit_json: Mutex<Option<String>>,
+}
+
+fn fingerprint_and_duplicate_check<T: Serialize>(
+    last_json: &Mutex<Option<String>>,
+    payload: &T,
+) -> Result<(String, bool), String> {
+    let fp = serde_json::to_string(payload).map_err(|e| e.to_string())?;
+    let dup = {
+        let guard = last_json.lock().map_err(|e| e.to_string())?;
+        guard.as_deref() == Some(fp.as_str())
+    };
+    Ok((fp, dup))
+}
+
+fn try_emit_hitl_event<T: Serialize + Clone>(
+    app: &AppHandle,
+    event: &str,
+    payload: &T,
+    last_json: &Mutex<Option<String>>,
+) -> Result<(), String> {
+    let (fp, dup) = fingerprint_and_duplicate_check(last_json, payload)?;
+    if dup {
+        eprintln!("[hitl-dedupe] skip duplicate Rust emit event={event} (same JSON as previous)");
+        return Ok(());
+    }
+    app.emit(event, payload.clone()).map_err(|e| e.to_string())?;
+    let mut guard = last_json.lock().map_err(|e| e.to_string())?;
+    *guard = Some(fp);
+    Ok(())
 }
 
 /// CamelCase JSON fields aligned with `HitlSensitivityMeta` on the TS client.
@@ -183,6 +216,33 @@ fn classify_human_review() -> HitlSensitivityHints {
 }
 
 impl HitlCoordinator {
+    fn clear_approval_emit_dedupe(&self) -> Result<(), String> {
+        let mut g = self
+            .last_approval_emit_json
+            .lock()
+            .map_err(|e| e.to_string())?;
+        *g = None;
+        Ok(())
+    }
+
+    fn clear_clarify_emit_dedupe(&self) -> Result<(), String> {
+        let mut g = self
+            .last_clarify_emit_json
+            .lock()
+            .map_err(|e| e.to_string())?;
+        *g = None;
+        Ok(())
+    }
+
+    fn clear_human_emit_dedupe(&self) -> Result<(), String> {
+        let mut g = self
+            .last_human_emit_json
+            .lock()
+            .map_err(|e| e.to_string())?;
+        *g = None;
+        Ok(())
+    }
+
     pub fn await_approval(
         &self,
         app: &AppHandle,
@@ -197,18 +257,23 @@ impl HitlCoordinator {
             .map_err(|e| e.to_string())?
             .insert(id.clone(), tx);
         let sensitivity = classify_system_tool(&tool_name, &args_summary);
-        app.emit(
+        let payload = ActionPendingPayload {
+            id: id.clone(),
+            tool_name,
+            args_summary,
+            node_id,
+            sensitivity,
+        };
+        try_emit_hitl_event(
+            app,
             "action_pending_approval",
-            ActionPendingPayload {
-                id: id.clone(),
-                tool_name,
-                args_summary,
-                node_id,
-                sensitivity,
-            },
-        )
-        .map_err(|e| e.to_string())?;
-        rx.recv().map_err(|_| "approval wait cancelled".to_string())
+            &payload,
+            &self.last_approval_emit_json,
+        )?;
+        rx.recv().map_err(|_| {
+            let _ = self.clear_approval_emit_dedupe();
+            "approval wait cancelled".to_string()
+        })
     }
 
     pub fn await_clarification(
@@ -225,18 +290,23 @@ impl HitlCoordinator {
             .map_err(|e| e.to_string())?
             .insert(id.clone(), tx);
         let sensitivity = classify_clarification();
-        app.emit(
+        let payload = ClarificationPayload {
+            id: id.clone(),
+            question,
+            options,
+            node_id,
+            sensitivity,
+        };
+        try_emit_hitl_event(
+            app,
             "clarification_needed",
-            ClarificationPayload {
-                id: id.clone(),
-                question,
-                options,
-                node_id,
-                sensitivity,
-            },
-        )
-        .map_err(|e| e.to_string())?;
-        rx.recv().map_err(|_| "clarification wait cancelled".to_string())
+            &payload,
+            &self.last_clarify_emit_json,
+        )?;
+        rx.recv().map_err(|_| {
+            let _ = self.clear_clarify_emit_dedupe();
+            "clarification wait cancelled".to_string()
+        })
     }
 
     pub fn resolve_approval(&self, id: &str, approved: bool) -> Result<(), String> {
@@ -246,8 +316,11 @@ impl HitlCoordinator {
             .map_err(|e| e.to_string())?
             .remove(id)
             .ok_or_else(|| format!("unknown approval id {id}"))?;
-        tx.send(approved)
-            .map_err(|_| "failed to deliver approval (orchestrator gone)".to_string())
+        let out = tx
+            .send(approved)
+            .map_err(|_| "failed to deliver approval (orchestrator gone)".to_string());
+        let _ = self.clear_approval_emit_dedupe();
+        out
     }
 
     pub fn submit_clarification(&self, id: &str, response: String) -> Result<(), String> {
@@ -257,8 +330,11 @@ impl HitlCoordinator {
             .map_err(|e| e.to_string())?
             .remove(id)
             .ok_or_else(|| format!("unknown clarification id {id}"))?;
-        tx.send(response)
-            .map_err(|_| "failed to deliver clarification".to_string())
+        let out = tx
+            .send(response)
+            .map_err(|_| "failed to deliver clarification".to_string());
+        let _ = self.clear_clarify_emit_dedupe();
+        out
     }
 
     pub fn await_human_review(
@@ -276,20 +352,24 @@ impl HitlCoordinator {
             .map_err(|e| e.to_string())?
             .insert(id.clone(), tx);
         let sensitivity = classify_human_review();
-        app.emit(
+        let payload = HumanReviewPayload {
+            id: id.clone(),
+            run_id,
+            node_id,
+            instructions,
+            state_snapshot,
+            sensitivity,
+        };
+        try_emit_hitl_event(
+            app,
             "workflow_human_needed",
-            HumanReviewPayload {
-                id: id.clone(),
-                run_id,
-                node_id,
-                instructions,
-                state_snapshot,
-                sensitivity,
-            },
-        )
-        .map_err(|e| e.to_string())?;
-        rx.recv()
-            .map_err(|_| "human review wait cancelled".to_string())
+            &payload,
+            &self.last_human_emit_json,
+        )?;
+        rx.recv().map_err(|_| {
+            let _ = self.clear_human_emit_dedupe();
+            "human review wait cancelled".to_string()
+        })
     }
 
     pub fn submit_human_review(&self, id: &str, body: HumanReviewResponse) -> Result<(), String> {
@@ -299,8 +379,11 @@ impl HitlCoordinator {
             .map_err(|e| e.to_string())?
             .remove(id)
             .ok_or_else(|| format!("unknown human review id {id}"))?;
-        tx.send(body)
-            .map_err(|_| "failed to deliver human review (orchestrator gone)".to_string())
+        let out = tx
+            .send(body)
+            .map_err(|_| "failed to deliver human review (orchestrator gone)".to_string());
+        let _ = self.clear_human_emit_dedupe();
+        out
     }
 }
 
@@ -351,5 +434,26 @@ mod tests {
         );
         assert_eq!(h.time_sensitive, Some(true));
         assert_eq!(h.category.as_deref(), Some("regulated"));
+    }
+
+    #[test]
+    fn emit_dedupe_detects_identical_serialized_payload() {
+        let last = Mutex::new(None::<String>);
+        let sens = classify_system_tool("system.stub", "{}");
+        let p = ActionPendingPayload {
+            id: "same-id".into(),
+            tool_name: "system.stub".into(),
+            args_summary: "{}".into(),
+            node_id: None,
+            sensitivity: sens.clone(),
+        };
+        let (fp, dup) = fingerprint_and_duplicate_check(&last, &p).unwrap();
+        assert!(!dup, "first emit should not be duplicate");
+        *last.lock().unwrap() = Some(fp);
+        let (_, dup2) = fingerprint_and_duplicate_check(&last, &p).unwrap();
+        assert!(dup2, "second identical JSON should be duplicate");
+        *last.lock().unwrap() = None;
+        let (_, dup3) = fingerprint_and_duplicate_check(&last, &p).unwrap();
+        assert!(!dup3, "after clear, same shape should not be duplicate");
     }
 }

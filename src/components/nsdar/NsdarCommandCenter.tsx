@@ -15,6 +15,7 @@ import {
 import type { HermesUiSnapshot } from '@/types/hermesOrchestration';
 import { handleUserRequest } from '@/hermes/handleUserRequest';
 import { createTauriNsdarInferenceEngine } from '@/hermes/inferenceEngines';
+import { wrapInferenceEngineWithRetry } from '@/hermes/wrapInferenceEngineRetry';
 import { MockInferenceEngine } from '@/hermes/mockInferenceEngine';
 import { NsdarChatPane, type FinetuneAgentMode, type PassState } from './NsdarChatPane';
 import { NsdarMatrixPane, nextTernary, type Ternary } from './NsdarMatrixPane';
@@ -245,12 +246,13 @@ export function NsdarCommandCenter({
     try {
       if (isTauriRuntime()) {
         const { invoke } = await import('@tauri-apps/api/core');
-        const engine = createTauriNsdarInferenceEngine({
+        const inner = createTauriNsdarInferenceEngine({
           invoke,
           buildLlama: () =>
             buildLlamaBase(adaptersDir, baseModelOnly, resolveAgentModelConfigForLlama()),
           getOverrides: () => overridesFromState(display, locked),
         });
+        const engine = wrapInferenceEngineWithRetry(inner);
         const orc = await handleUserRequest(
           {
             userPrompt: prompt,

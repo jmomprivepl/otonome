@@ -5,6 +5,7 @@ import speechWorkerManager from '@/workers/speechWorkerManager';
 import { Send, Loader2, Volume2, Mic, Settings, StopCircle } from 'lucide-react';
 import { agentProfiles, getAgentProfile } from '@/config/agentProfiles';
 import { ChatNodeQueue } from '@/utils/ChatNodeQueue';
+import { parseAssistantActions } from '@/lib/assistantActionParser';
 
 import { exaSearch, exaAnswer } from '@/exaops';
 import { listBases, listTables, listRecords } from '@/airtableops';
@@ -579,142 +580,62 @@ export function ChatNode({ data, id }: NodeProps<ChatNodeData>) {
     }
   }, [messages, data.initialUserMessage, id, selectedProfile]);
 
-  const extractActions = (content: string, processAction: boolean = false): { cleanContent: string, hasAction: boolean } => {
-    // Default return value if content is undefined or null
-    if (!content) {
-      return { cleanContent: '', hasAction: false };
-    }
-    
-    let cleanContent = content;
-    let hasAction = false;
-    
-    // Look for standard action patterns
-    const actionRegex = /\{"action":\s*"(search|getanswer|list_records)",\s*"(request|table_id)":\s*"([^"]+)"\}/g;
-    const matches = [...content.matchAll(actionRegex)];
-    
-    // Look for task decomposition action pattern
-    // More flexible regex that can handle different JSON formats and whitespace
-    const decomposeTaskRegex = /\{[\s\n]*"action"[\s\n]*:[\s\n]*"decompose_task"[\s\n]*,[\s\n]*"subtasks"[\s\n]*:[\s\n]*(\[[\s\S]*?\])[\s\n]*\}/s;
-    let decomposeMatch = content.match(decomposeTaskRegex);
-    
-    // If the first regex doesn't match, try a more lenient approach
-    if (!decomposeMatch) {
-      // Try to find any JSON object in the text that contains decompose_task and subtasks
-      const jsonRegex = /\{[\s\S]*?"action"[\s\S]*?"decompose_task"[\s\S]*?"subtasks"[\s\S]*?:[\s\S]*?(\[[\s\S]*?\])[\s\S]*?\}/g;
-      const jsonMatch = jsonRegex.exec(content);
-      
-      if (jsonMatch && jsonMatch[1]) {
-        try {
-          // Validate that this is valid JSON before proceeding
-          JSON.parse(jsonMatch[1]);
-          // If it parses correctly, use this match
-          decomposeMatch = jsonMatch;
-        } catch (e) {
-          console.error('Invalid JSON in alternative extraction:', e);
-        }
-      }
-    }
-    
-    // Process standard actions
-    if (matches.length > 0) {
-      hasAction = true;
-      
-      // Process each action found
-      matches.forEach(match => {
-        const fullMatch = match[0];
-        const action = match[1];
-        const type = match[2];
-        const request = match[3];
+  const extractActions = (
+    content: string,
+    processAction: boolean = false,
+  ): { cleanContent: string; hasAction: boolean } => {
+    const parsed = parseAssistantActions(content);
+    const hasAction = parsed.actions.length > 0;
 
-        console.log(`Found action: ${action}, type: ${type}, request: ${request}`);
-        
-        if (processAction) {
-          // Execute the action
-          if (action === "search" && request) {
-            setExaActions(["search", request]);
-          } else if (action === "getanswer" && request) {
-            setExaActions(["getanswer", request]);
-          } else if (action === "list_records" && request) {
-            setAirtableActions(["list_records", request]);
-          }
-        }
-        
-        // Remove the action from the content
-        cleanContent = cleanContent.replace(fullMatch, '');
-      });
-    }
-    
-    // Process decompose_task action
-    if (decomposeMatch && decomposeMatch[1]) {
-      hasAction = true;
-      
-      if (processAction) {
-        try {
-          // Parse the subtasks JSON array
-          const subtasks = JSON.parse(decomposeMatch[1]);
-          console.log('Parsed subtasks:', subtasks);
-          
-          // Create subtask nodes directly in the flow, similar to output nodes
-          subtasks.forEach((subtask: any, index: number) => {
-            // Create a new chat node for each subtask
+    if (processAction && hasAction) {
+      for (const action of parsed.actions) {
+        if (action.kind === 'search') {
+          setExaActions(['search', action.request]);
+        } else if (action.kind === 'getanswer') {
+          setExaActions(['getanswer', action.request]);
+        } else if (action.kind === 'list_records') {
+          setAirtableActions(['list_records', action.request]);
+        } else if (action.kind === 'decompose_task') {
+          action.subtasks.forEach((subtask, index) => {
             const subtaskNodeId = crypto.randomUUID();
             const subtaskNode = {
               id: subtaskNodeId,
               type: 'chatNode',
-              position: { 
-                x: data.position.x + 500 + (index * 100),
-                y: data.position.y - 200 + (index * 150)
+              position: {
+                x: data.position.x + 500 + index * 100,
+                y: data.position.y - 200 + index * 150,
               },
-              data: { 
-                label: subtask.title,
+              data: {
+                label: subtask.title ?? `Subtask ${index + 1}`,
                 selectedProfile: subtask.suggestedAgent,
                 messages: [],
-                initialUserMessage: subtask.description || subtask.title,
+                initialUserMessage: subtask.description || subtask.title || '',
                 onNodesChange: data.onNodesChange,
                 onEdgesChange: data.onEdgesChange,
-                position: { 
-                  x: data.position.x + 500 + (index * 100),
-                  y: data.position.y - 200 + (index * 150)
+                position: {
+                  x: data.position.x + 500 + index * 100,
+                  y: data.position.y - 200 + index * 150,
                 },
-                // Add a delay to stagger the message processing
-                messageDelay: index * 500
-              }
+                messageDelay: index * 500,
+              },
             };
-            
-            // Create an edge connecting this node to the subtask node
+
             const edge = {
               id: `${id}-${subtaskNodeId}`,
               source: id,
               target: subtaskNodeId,
-              type: 'animated'
+              type: 'animated',
             };
 
-            // Add the node and edge to the flow
             data.onNodesChange([{ type: 'add', item: subtaskNode }]);
             data.onEdgesChange([{ type: 'add', item: edge }]);
-            
-            // Add the new node to the ChatNodeQueue with a delay
-            // This ensures nodes are processed sequentially
-            queue.current.enqueueNode(
-              subtaskNodeId, 
-              subtask.description || subtask.title,
-              id // Pass parent ID
-            );
+            queue.current.enqueueNode(subtaskNodeId, subtask.description || subtask.title || '', id);
           });
-          
-        } catch (error) {
-          console.error('Error processing decompose_task action:', error);
         }
       }
-      
-      // Remove the action from the content
-      cleanContent = cleanContent.replace(decomposeMatch[0], '');
     }
-    
-    // Clean up any extra whitespace
-    cleanContent = cleanContent.trim();
-    
-    return { cleanContent, hasAction };
+
+    return { cleanContent: parsed.cleanText, hasAction };
   };
 
   const handleSubmit = () => {
