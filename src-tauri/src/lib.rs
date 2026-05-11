@@ -32,6 +32,14 @@ use hitl::HumanReviewResponse;
 use orchestrator::{AgentRuntimeState, DagGraphPayload, DagPublishPayload, DagRunOptions, DagRunStartArgs};
 use router_llama_cpp::router_generate_routing_vector;
 use sop_normalize::{normalize_sop_with_llama, NormalizedSop};
+use serde::Deserialize;
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct WebviewDebugLogPayload {
+    message: String,
+    data_json: String,
+}
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -39,6 +47,7 @@ pub fn run() {
         .manage(LlamaCliState::default())
         .manage(AgentRuntimeState::default())
         .invoke_handler(tauri::generate_handler![
+            webview_debug_log,
             llama_cli_stop,
             llama_cli_start_session,
             llama_cli_send_line,
@@ -75,6 +84,11 @@ pub fn run() {
         })
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
+}
+
+#[tauri::command]
+fn webview_debug_log(payload: WebviewDebugLogPayload) {
+    eprintln!("[webview-js] {} {}", payload.message, payload.data_json);
 }
 
 #[tauri::command]

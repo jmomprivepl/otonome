@@ -68,6 +68,9 @@ import { PlaygroundDrillProvider } from '@/contexts/playgroundWorkflowContext';
 import { SopDagUpdateContext } from '@/components/sopDagUpdateContext';
 import { PlaygroundRightButtonMarquee } from '@/components/PlaygroundRightButtonMarquee';
 import { extractTextFromPdfArrayBuffer } from '@/lib/extractPdfText';
+import { webviewDebugLog } from '@/lib/webviewDebugLog';
+import { useTauriReactFlowBlankWatchdog } from '@/lib/useTauriReactFlowBlankWatchdog';
+import { TauriReactFlowViewportHeal } from '@/components/TauriReactFlowViewportHeal';
 import './playground-flow.css';
 
 const PLAYGROUND_FLOW_ID = 'playground-react-flow';
@@ -389,9 +392,6 @@ function PlaygroundInner({ sidebarCollapsed }: PlaygroundScreenProps) {
   const flowMountHostRef = useRef<HTMLDivElement>(null);
   const [flowPixelSize, setFlowPixelSize] = useState<{ width: number; height: number } | null>(null);
   const [flowRenderReady, setFlowRenderReady] = useState(false);
-  const [webviewRepaintGuardOn, setWebviewRepaintGuardOn] = useState(false);
-  const webviewBlankFixCooldownRef = useRef(0);
-  const webviewBlankConsecutiveRef = useRef(0);
   useEffect(() => {
     const t = window.setTimeout(() => setFlowRenderReady(true), 100);
     return () => window.clearTimeout(t);
@@ -423,94 +423,6 @@ function PlaygroundInner({ sidebarCollapsed }: PlaygroundScreenProps) {
     return () => ro.disconnect();
   }, []);
 
-  useEffect(() => {
-    if (!isTauriRuntime()) return;
-    if (!webviewRepaintGuardOn) return;
-    const host = flowMountHostRef.current;
-    if (!host) return;
-
-    const viewport = host.querySelector<HTMLElement>('.react-flow__viewport');
-    if (!viewport) return;
-
-    let tick = 0;
-    const id = window.setInterval(() => {
-      // Nudge compositor without touching layout/transform math.
-      // WebView2 can drop transformed layers; toggling a trivial filter forces repaint.
-      tick += 1;
-      viewport.style.filter = tick % 2 === 0 ? 'opacity(0.99999)' : 'opacity(1)';
-    }, 120);
-    return () => {
-      window.clearInterval(id);
-      viewport.style.filter = '';
-    };
-  }, [webviewRepaintGuardOn]);
-
-  useEffect(() => {
-    if (!isTauriRuntime()) return;
-    if (!webviewRepaintGuardOn) return;
-
-    const host = flowMountHostRef.current;
-    if (!host) return;
-    const viewport = host.querySelector<HTMLElement>('.react-flow__viewport');
-    if (!viewport) return;
-
-    const forceRepaint = () => {
-      const now = Date.now();
-      if (now - webviewBlankFixCooldownRef.current < 1000) return;
-      webviewBlankFixCooldownRef.current = now;
-      try {
-        const prevDisplay = viewport.style.display;
-        viewport.style.display = 'none';
-        void viewport.offsetHeight;
-        viewport.style.display = prevDisplay;
-      } catch {
-        /* ignore */
-      }
-    };
-
-    const interval = window.setInterval(() => {
-      try {
-        const hostRect = host.getBoundingClientRect();
-        if (hostRect.width < 20 || hostRect.height < 20) return;
-
-        const nodeEl = host.querySelector<HTMLElement>('.react-flow__node');
-        if (!nodeEl) return;
-
-        const nodeRect = nodeEl.getBoundingClientRect();
-        const blankLikely = nodeRect.width <= 1 || nodeRect.height <= 1;
-        if (!blankLikely) {
-          webviewBlankConsecutiveRef.current = 0;
-          return;
-        }
-
-        webviewBlankConsecutiveRef.current += 1;
-        if (webviewBlankConsecutiveRef.current < 2) return;
-
-        const vpRect = viewport.getBoundingClientRect();
-        const cs = window.getComputedStyle(viewport);
-        console.error('='.repeat(140));
-        console.error('WEBVIEW2 RENDER FAILURE: REACTFLOW BLANK FRAME DETECTED');
-        console.error('hostRect:', { w: hostRect.width, h: hostRect.height });
-        console.error('viewportRect:', { w: vpRect.width, h: vpRect.height });
-        console.error('nodeRect:', { w: nodeRect.width, h: nodeRect.height });
-        console.error('viewport styles:', {
-          display: cs.display,
-          visibility: cs.visibility,
-          opacity: cs.opacity,
-          transform: cs.transform,
-          filter: cs.filter,
-          willChange: cs.willChange,
-        });
-        console.error('='.repeat(140));
-
-        forceRepaint();
-      } catch {
-        /* ignore */
-      }
-    }, 220);
-
-    return () => window.clearInterval(interval);
-  }, [webviewRepaintGuardOn]);
   useLayoutEffect(() => {
     const host = flowMountHostRef.current;
     if (!host) return;
@@ -580,6 +492,12 @@ function PlaygroundInner({ sidebarCollapsed }: PlaygroundScreenProps) {
   /** When set, playground forest was already seeded from `/playground?sop=…` — do not overwrite on unrelated Kanban updates. */
   const forestHydratedFromSopUrlRef = useRef<string | null>(null);
   const [fitNonce, setFitNonce] = useState(0);
+  const [flowRecoveryNonce, setFlowRecoveryNonce] = useState(0);
+  const [tauriRfHealNonce, setTauriRfHealNonce] = useState(0);
+  const bumpRfRemount = useCallback(() => setFlowRecoveryNonce((n) => n + 1), []);
+  const bumpFitAfterRfRemount = useCallback(() => setFitNonce((n) => n + 1), []);
+  const bumpTauriRfHeal = useCallback(() => setTauriRfHealNonce((n) => n + 1), []);
+  const lastMoveHealAtRef = useRef(0);
 
   const getSandboxGraph = useCallback(() => {
     return flowGraphRef.current?.() ?? toAgentLayerSnapshot(dagNodes, dagEdges);
@@ -710,6 +628,21 @@ function PlaygroundInner({ sidebarCollapsed }: PlaygroundScreenProps) {
   }, [dagEdges]);
 
   const isTauri = isTauriRuntime();
+
+  useEffect(() => {
+    if (!isTauri) return;
+    void webviewDebugLog('playground_open', { path: typeof window !== 'undefined' ? window.location.pathname : '' });
+  }, [isTauri]);
+
+  useTauriReactFlowBlankWatchdog({
+    label: 'playground',
+    flowRenderReady,
+    hostRef: flowMountHostRef,
+    reactNodeCount: nodes.length,
+    recoveryNonce: flowRecoveryNonce,
+    onRemount: bumpRfRemount,
+    onAfterRemount: bumpFitAfterRfRemount,
+  });
 
   const onNodesChange = useCallback((changes: NodeChange[]) => {
     // STRICT MONITOR: if React Flow emits a bogus coordinate, log the exact event.
@@ -1158,17 +1091,24 @@ function PlaygroundInner({ sidebarCollapsed }: PlaygroundScreenProps) {
                 {flowRenderReady ? (
                   <ReactFlow
                     id={PLAYGROUND_FLOW_ID}
-                    key={`${sopIdFromUrl ?? 'sandbox'}-${navigationTrail.map((s) => s.id).join('/')}`}
+                    key={`${sopIdFromUrl ?? 'sandbox'}-${navigationTrail.map((s) => s.id).join('/')}-r${flowRecoveryNonce}`}
                     nodes={nodes}
                     edges={edges}
                     onNodesChange={onNodesChange}
                     onEdgesChange={onEdgesChange}
                     onConnect={onConnect}
                     onNodeDragStart={() => {
-                      if (isTauri) setWebviewRepaintGuardOn(true);
+                      if (isTauri) void webviewDebugLog('playground_node_drag_start', { nodes: nodes.length });
                     }}
                     onNodeDragStop={() => {
-                      if (isTauri) setWebviewRepaintGuardOn(false);
+                      if (isTauri) {
+                        void webviewDebugLog('playground_node_drag_stop', {
+                          nodes: nodes.length,
+                          remount: true,
+                        });
+                        bumpRfRemount();
+                        bumpFitAfterRfRemount();
+                      }
                     }}
                     onNodeMouseEnter={noopNodeMouseEnterForPointerEvents}
                     nodeTypes={nodeTypes}
@@ -1183,6 +1123,7 @@ function PlaygroundInner({ sidebarCollapsed }: PlaygroundScreenProps) {
                     elevateNodesOnSelect={!isTauri}
                     autoPanOnNodeDrag={!isTauri}
                     autoPanOnConnect={!isTauri}
+                    // WebView2: immediate drag (0) can blank during move; remount on drag stop restores the canvas.
                     nodeDragThreshold={isTauri ? 0 : undefined}
                     fitView
                     className="playground-flow absolute inset-0 bg-transparent"
@@ -1200,6 +1141,13 @@ function PlaygroundInner({ sidebarCollapsed }: PlaygroundScreenProps) {
                     connectionLineStyle={{ stroke: '#a78bfa', strokeWidth: 2.5 }}
                     minZoom={0.2}
                     maxZoom={1.8}
+                    onMoveEnd={() => {
+                      if (!isTauri) return;
+                      const now = Date.now();
+                      if (now - lastMoveHealAtRef.current < 500) return;
+                      lastMoveHealAtRef.current = now;
+                      bumpTauriRfHeal();
+                    }}
                     onMove={(_, viewport) => {
                       const { x, y, zoom } = viewport;
                       const bad =
@@ -1227,6 +1175,7 @@ function PlaygroundInner({ sidebarCollapsed }: PlaygroundScreenProps) {
                   >
                     <PlaygroundFlowGraphSnapshot saveRef={flowGraphRef} />
                     <PlaygroundFitViewTrigger nonce={fitNonce} />
+                    {isTauri ? <TauriReactFlowViewportHeal nonce={tauriRfHealNonce} /> : null}
                     <Background gap={20} size={1} />
                     {isTauri ? null : <MiniMap zoomable pannable />}
                     <PlaygroundRightButtonMarquee

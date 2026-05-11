@@ -27,6 +27,9 @@ import { extractTextFromPdfArrayBuffer } from '@/lib/extractPdfText';
 import { toRustDagGraph } from '@/hermes/tauriWorkflowRun';
 import { invokeDagPublishGraph } from '@/hermes/dagPublishInvoke';
 import { resolveBundleAuditForAdHocGraph } from '@/hermes/resolveWorkflowBundle';
+import { webviewDebugLog } from '@/lib/webviewDebugLog';
+import { useTauriReactFlowBlankWatchdog } from '@/lib/useTauriReactFlowBlankWatchdog';
+import { TauriReactFlowViewportHeal } from '@/components/TauriReactFlowViewportHeal';
 
 const nodeTypes = { sopDag: SopDagNode };
 
@@ -243,9 +246,11 @@ function SopGraphInner({ sidebarCollapsed }: SopGraphScreenProps) {
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [canvasInteractive, setCanvasInteractive] = useState(true);
   const [flowRenderReady, setFlowRenderReady] = useState(false);
-  const [webviewRepaintGuardOn, setWebviewRepaintGuardOn] = useState(false);
-  const webviewBlankFixCooldownRef = useRef(0);
-  const webviewBlankConsecutiveRef = useRef(0);
+  const [flowRecoveryNonce, setFlowRecoveryNonce] = useState(0);
+  const bumpRfRemount = useCallback(() => setFlowRecoveryNonce((n) => n + 1), []);
+  const [tauriRfHealNonce, setTauriRfHealNonce] = useState(0);
+  const bumpTauriRfHeal = useCallback(() => setTauriRfHealNonce((n) => n + 1), []);
+  const lastMoveHealAtRef = useRef(0);
   useEffect(() => {
     const t = window.setTimeout(() => setFlowRenderReady(true), 100);
     return () => window.clearTimeout(t);
@@ -272,93 +277,6 @@ function SopGraphInner({ sidebarCollapsed }: SopGraphScreenProps) {
     return () => ro.disconnect();
   }, []);
 
-  useEffect(() => {
-    if (!isTauriRuntime()) return;
-    if (!webviewRepaintGuardOn) return;
-    const host = flowMountHostRef.current;
-    if (!host) return;
-
-    const viewport = host.querySelector<HTMLElement>('.react-flow__viewport');
-    if (!viewport) return;
-
-    let tick = 0;
-    const id = window.setInterval(() => {
-      tick += 1;
-      viewport.style.filter = tick % 2 === 0 ? 'opacity(0.99999)' : 'opacity(1)';
-    }, 120);
-    return () => {
-      window.clearInterval(id);
-      viewport.style.filter = '';
-    };
-  }, [webviewRepaintGuardOn]);
-
-  useEffect(() => {
-    if (!isTauriRuntime()) return;
-    if (!webviewRepaintGuardOn) return;
-
-    const host = flowMountHostRef.current;
-    if (!host) return;
-    const viewport = host.querySelector<HTMLElement>('.react-flow__viewport');
-    if (!viewport) return;
-
-    const forceRepaint = () => {
-      const now = Date.now();
-      if (now - webviewBlankFixCooldownRef.current < 1000) return;
-      webviewBlankFixCooldownRef.current = now;
-      try {
-        const prevDisplay = viewport.style.display;
-        viewport.style.display = 'none';
-        void viewport.offsetHeight;
-        viewport.style.display = prevDisplay;
-      } catch {
-        /* ignore */
-      }
-    };
-
-    const interval = window.setInterval(() => {
-      try {
-        const hostRect = host.getBoundingClientRect();
-        if (hostRect.width < 20 || hostRect.height < 20) return;
-
-        const nodeEl = host.querySelector<HTMLElement>('.react-flow__node');
-        if (!nodeEl) return;
-
-        const nodeRect = nodeEl.getBoundingClientRect();
-        const blankLikely = nodeRect.width <= 1 || nodeRect.height <= 1;
-        if (!blankLikely) {
-          webviewBlankConsecutiveRef.current = 0;
-          return;
-        }
-
-        webviewBlankConsecutiveRef.current += 1;
-        if (webviewBlankConsecutiveRef.current < 2) return;
-
-        const vpRect = viewport.getBoundingClientRect();
-        const cs = window.getComputedStyle(viewport);
-        console.error('='.repeat(140));
-        console.error('WEBVIEW2 RENDER FAILURE: REACTFLOW BLANK FRAME DETECTED');
-        console.error('hostRect:', { w: hostRect.width, h: hostRect.height });
-        console.error('viewportRect:', { w: vpRect.width, h: vpRect.height });
-        console.error('nodeRect:', { w: nodeRect.width, h: nodeRect.height });
-        console.error('viewport styles:', {
-          display: cs.display,
-          visibility: cs.visibility,
-          opacity: cs.opacity,
-          transform: cs.transform,
-          filter: cs.filter,
-          willChange: cs.willChange,
-        });
-        console.error('='.repeat(140));
-
-        forceRepaint();
-      } catch {
-        /* ignore */
-      }
-    }, 220);
-
-    return () => window.clearInterval(interval);
-  }, [webviewRepaintGuardOn]);
-
   const nodes = useMemo(
     () => agentDagNodes.map((n) => toFlowNode(n, selectedIds.includes(n.id))),
     [agentDagNodes, selectedIds],
@@ -367,6 +285,22 @@ function SopGraphInner({ sidebarCollapsed }: SopGraphScreenProps) {
     () => agentDagEdges.map((e) => ({ id: e.id, source: e.source, target: e.target })),
     [agentDagEdges],
   );
+
+  const isTauri = isTauriRuntime();
+
+  useEffect(() => {
+    if (!isTauri) return;
+    void webviewDebugLog('sop_graph_open', { sopId: sopId ?? '' });
+  }, [isTauri, sopId]);
+
+  useTauriReactFlowBlankWatchdog({
+    label: 'sop_graph',
+    flowRenderReady,
+    hostRef: flowMountHostRef,
+    reactNodeCount: nodes.length,
+    recoveryNonce: flowRecoveryNonce,
+    onRemount: bumpRfRemount,
+  });
 
   const onNodesChange = useCallback((changes: NodeChange[]) => {
     // STRICT MONITOR: log bogus coordinates with the exact change event.
@@ -645,16 +579,31 @@ function SopGraphInner({ sidebarCollapsed }: SopGraphScreenProps) {
           >
             {flowRenderReady ? (
               <ReactFlow
+                key={`${sopId}-r${flowRecoveryNonce}`}
                 nodes={nodes}
                 edges={edges}
                 onNodesChange={onNodesChange}
                 onEdgesChange={onEdgesChange}
                 onConnect={onConnect}
                 onNodeDragStart={() => {
-                  if (isTauriRuntime()) setWebviewRepaintGuardOn(true);
+                  if (isTauri) void webviewDebugLog('sop_graph_node_drag_start', { nodes: nodes.length, sopId });
                 }}
                 onNodeDragStop={() => {
-                  if (isTauriRuntime()) setWebviewRepaintGuardOn(false);
+                  if (isTauri) {
+                    void webviewDebugLog('sop_graph_node_drag_stop', {
+                      nodes: nodes.length,
+                      sopId,
+                      remount: true,
+                    });
+                    bumpRfRemount();
+                  }
+                }}
+                onMoveEnd={() => {
+                  if (!isTauri) return;
+                  const now = Date.now();
+                  if (now - lastMoveHealAtRef.current < 500) return;
+                  lastMoveHealAtRef.current = now;
+                  bumpTauriRfHeal();
                 }}
                 onNodeMouseEnter={noopNodeMouseEnterForPointerEvents}
                 nodeTypes={nodeTypes}
@@ -664,10 +613,13 @@ function SopGraphInner({ sidebarCollapsed }: SopGraphScreenProps) {
                 elementsSelectable={canvasInteractive}
                 deleteKeyCode={null}
                 fitView
+                // WebView2: same as playground — immediate drag + remount on drag stop.
+                nodeDragThreshold={isTauri ? 0 : undefined}
                 className="absolute inset-0 bg-transparent"
                 proOptions={{ hideAttribution: true }}
               >
                 <Background />
+                {isTauri ? <TauriReactFlowViewportHeal nonce={tauriRfHealNonce} /> : null}
                 <MiniMap />
                 {nodes.length === 0 ? (
                   <div className="pointer-events-none absolute inset-0 z-[40] flex items-center justify-center p-6">

@@ -6,14 +6,14 @@
   overscroll-behavior: none;
 }
 
-/* WebView2 / Tauri: stabilize compositor layers during drag (prevents intermittent "disappearing" nodes). */
-.playground-flow .react-flow__viewport {
+/* Outside Tauri only: extra compositor layers can help Chrome; embedded WebView2 has regressed with these during drag. */
+html:not(.tauri) .playground-flow .react-flow__viewport {
   will-change: transform;
   backface-visibility: hidden;
   transform: translateZ(0);
 }
 
-.playground-flow .react-flow__node {
+html:not(.tauri) .playground-flow .react-flow__node {
   will-change: transform;
   backface-visibility: hidden;
   transform: translateZ(0);

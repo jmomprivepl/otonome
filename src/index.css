@@ -21,11 +21,8 @@ canvas {
   overscroll-behavior: none;
 }
 
-/* WebView2/Tauri: avoid compositor bugs with backdrop/filter on transformed elements (React Flow drags via transforms). */
+/* WebView2/Tauri: avoid backdrop/filter on transformed subtrees; skip isolation/contain (can trigger blank layers). */
 .tauri .react-flow {
-  isolation: isolate;
-  /* IMPORTANT: do NOT use `contain: size` here; it can collapse intrinsic sizing and blank the canvas. */
-  contain: layout paint;
   filter: none !important;
 }
 

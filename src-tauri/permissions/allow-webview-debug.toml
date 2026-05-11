@@ -1,0 +1,6 @@
+[[permission]]
+identifier = "allow-webview-debug"
+description = "Forward WebView diagnostics to the host process (stderr) for WebView2/React Flow issues."
+commands.allow = [
+  "webview_debug_log",
+]

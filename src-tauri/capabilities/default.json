@@ -11,6 +11,7 @@
     "allow-agent-orchestrator",
     "allow-nsdar",
     "allow-hardware-preference",
-    "allow-hermes"
+    "allow-hermes",
+    "allow-webview-debug"
   ]
 }
